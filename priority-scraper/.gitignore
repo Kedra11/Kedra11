@@ -1,0 +1,15 @@
+# Секреты и локальные данные — НЕ коммитим
+.env
+auth_state.json
+
+# Результаты выгрузок
+output/
+*.csv
+*.xlsx
+*.xls
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
