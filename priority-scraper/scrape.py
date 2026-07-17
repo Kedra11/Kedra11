@@ -307,11 +307,23 @@ def _read_sc(page):
 
 
 def _next_record(page):
-    """Перейти к следующей заявке. Лучшая догадка — стрелка вниз в гриде."""
+    """
+    Перейти к следующей заявке так же, как это делает человек:
+    ESC — выйти из вкладок обратно на экран выбора заявок,
+    ArrowDown — перейти на строку ниже (следующий SC).
+    """
+    # ESC возвращает фокус на грид со списком заявок
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(600)
+    # на некоторых экранах нужен второй ESC — он безвреден, если уже на гриде
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(600)
+    # стрелка вниз по текущему полю грида — на следующую заявку
     try:
-        page.keyboard.press("ArrowDown")
+        page.locator(".priCurrentFieldStyle").first.press("ArrowDown")
     except Exception:
-        pass
+        page.keyboard.press("ArrowDown")
+    page.wait_for_timeout(800)
 
 
 def cmd_batch():
