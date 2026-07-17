@@ -17,6 +17,7 @@ Priority scraper — заходит в веб-интерфейс Priority у Т�
 """
 
 import os
+import re
 import sys
 import argparse
 from pathlib import Path
@@ -36,6 +37,11 @@ URL = os.getenv("PRIORITY_URL", "").strip()
 USER = os.getenv("PRIORITY_USER", "").strip()
 PASSWORD = os.getenv("PRIORITY_PASS", "").strip()
 HEADLESS = os.getenv("HEADLESS", "0").strip() in ("1", "true", "True", "yes")
+# "msedge" — рулить твоим установленным Edge; пусто — свой Chromium от Playwright
+CHANNEL = os.getenv("PW_CHANNEL", "").strip()
+
+# Вкладки нижней панели заявки (имена кнопок — как в записи codegen)
+DETAIL_TABS = ["תאור התקלה", "תאור התיקון", "עבודה", "חלקים", "דו שיח פנימי"]
 
 # Кандидаты селекторов для формы логина. Priority у всех чуть разный,
 # поэтому пробуем несколько вариантов; если не сработает — залогинишься руками.
@@ -54,6 +60,14 @@ SUBMIT_SELECTORS = [
     'button:has-text("Вход")', 'button:has-text("Войти")',
     'button:has-text("Login")', 'button:has-text("Sign in")',
 ]
+
+
+def _launch(pw, headless):
+    """Запуск браузера. Если PW_CHANNEL=msedge — берём установленный Edge."""
+    kwargs = {"headless": headless}
+    if CHANNEL:
+        kwargs["channel"] = CHANNEL
+    return pw.chromium.launch(**kwargs)
 
 
 def _require_url():
@@ -79,7 +93,7 @@ def cmd_setup():
     _require_url()
     with sync_playwright() as pw:
         # для первичной настройки браузер всегда видимый — так удобнее
-        browser = pw.chromium.launch(headless=False)
+        browser = _launch(pw, headless=False)
         context = browser.new_context(accept_downloads=True)
         page = context.new_page()
 
@@ -131,7 +145,7 @@ def cmd_run():
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=HEADLESS)
+        browser = _launch(pw, headless=HEADLESS)
         context = browser.new_context(
             storage_state=str(AUTH_FILE), accept_downloads=True
         )
@@ -203,17 +217,118 @@ def download_via_click(page, click_selector, save_name):
     return dest
 
 
+# --- режим discover: изучить структуру ОДНОЙ заявки ------------------------
+
+def cmd_discover():
+    """
+    Открыть ОДНУ заявку и выгрузить содержимое всех вкладок «как есть»
+    (текст + iframe'ы + таблицы + скриншот), чтобы увидеть структуру перед
+    массовой выгрузкой. Ничего не 'помечать' руками не нужно — скрипт сам
+    читает то, что видно на каждой вкладке.
+    """
+    _require_url()
+    if not AUTH_FILE.exists():
+        sys.exit("❌ Нет сессии. Сначала: python scrape.py setup")
+
+    out = OUTPUT_DIR / "discover"
+    out.mkdir(parents=True, exist_ok=True)
+
+    with sync_playwright() as pw:
+        browser = _launch(pw, headless=False)
+        context = browser.new_context(
+            storage_state=str(AUTH_FILE), accept_downloads=True
+        )
+        page = context.new_page()
+        print(f"→ Открываю {URL}")
+        page.goto(URL, wait_until="domcontentloaded")
+
+        print("\n" + "=" * 60)
+        print("В браузере ОТКРОЙ ОДНУ заявку так, чтобы снизу появились")
+        print("вкладки (תאור התקלה, עבודה, חלקים …). Обычно:")
+        print("  меню קריאות שרות → клик по строке заявки.")
+        print("Потом вернись сюда и нажми Enter.")
+        print("=" * 60)
+        input("\n[Enter] когда заявка открыта… ")
+
+        _dump_tab(page, out, "00_full")            # экран целиком — точка отсчёта
+        for i, tab in enumerate(DETAIL_TABS, 1):
+            try:
+                page.get_by_role("button", name=tab).first.click()
+                page.wait_for_timeout(1500)
+                _dump_tab(page, out, f"{i:02d}_{_slug(tab)}", tab_label=tab)
+                print(f"  ✓ вкладка «{tab}» выгружена")
+            except Exception as e:
+                print(f"  ⚠ вкладку «{tab}» не удалось открыть: {e}")
+
+        print(f"\n✓ Готово. Смотри папку: {out}")
+        print("  Пришли мне .txt (или скриншоты .png) оттуда — по ним соберу")
+        print("  точную массовую выгрузку.")
+        browser.close()
+
+
+def _slug(s):
+    return re.sub(r"[^\w]+", "_", s).strip("_") or "tab"
+
+
+def _dump_tab(page, out, name, tab_label=None):
+    """Скриншот + весь текст страницы + текст из iframe'ов + HTML-таблицы."""
+    import pandas as pd
+
+    try:
+        page.screenshot(path=str(out / f"{name}.png"), full_page=True)
+    except Exception:
+        pass
+
+    lines = []
+    if tab_label:
+        lines.append(f"# Вкладка: {tab_label}\n")
+
+    # 1) текст основной страницы
+    try:
+        lines.append("=== ТЕКСТ СТРАНИЦЫ ===")
+        lines.append(page.locator("body").inner_text())
+    except Exception as e:
+        lines.append(f"(не смог прочитать текст страницы: {e})")
+
+    # 2) текст из iframe'ов — сюда попадёт редактор תאור התקלה
+    for idx, fr in enumerate(page.frames):
+        if fr == page.main_frame:
+            continue
+        try:
+            txt = fr.locator("body").inner_text()
+            if txt.strip():
+                lines.append(f"\n=== IFRAME #{idx} ({fr.url}) ===")
+                lines.append(txt)
+        except Exception:
+            pass
+
+    # 3) HTML-таблицы (сетки עבודה/חלקים, если это настоящие <table>)
+    try:
+        tables = pd.read_html(page.content())
+        lines.append(f"\n=== HTML-ТАБЛИЦ НА СТРАНИЦЕ: {len(tables)} ===")
+        for t_i, df in enumerate(tables, 1):
+            lines.append(f"\n--- таблица {t_i} ({df.shape[0]}×{df.shape[1]}) ---")
+            lines.append(df.head(20).to_string())
+    except Exception:
+        lines.append("\n(HTML-таблиц не найдено — сетки могут быть не <table>)")
+
+    (out / f"{name}.txt").write_text("\n".join(lines), encoding="utf-8")
+
+
 # --- точка входа -----------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(description="Priority scraper (локальный запуск)")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("setup", help="залогиниться и сохранить сессию (один раз)")
+    sub.add_parser("discover", help="изучить структуру ОДНОЙ заявки (все вкладки)")
     sub.add_parser("run", help="выгрузить данные, используя сохранённую сессию")
     args = parser.parse_args()
 
     if args.cmd == "setup":
         cmd_setup()
+    elif args.cmd == "discover":
+        cmd_discover()
     elif args.cmd == "run":
         cmd_run()
 
