@@ -43,6 +43,12 @@ CHANNEL = os.getenv("PW_CHANNEL", "").strip()
 # Вкладки нижней панели заявки (имена кнопок — как в записи codegen)
 DETAIL_TABS = ["תאור התקלה", "תאור התיקון", "עבודה", "חלקים", "דו שיח פנימי"]
 
+# Для массового прохода (режим batch) — 4 вкладки, которые нужны пользователю
+BATCH_TABS = ["תאור התקלה", "תאור התיקון", "עבודה", "חלקים"]
+BATCH_LIMIT = int(os.getenv("BATCH_LIMIT", "5") or "5")   # сколько заявок за прогон
+SC_FROM = os.getenv("SC_FROM", "SC26000193").strip()
+SC_TO = os.getenv("SC_TO", "").strip()                    # напр. SC22000001; пусто = не проверять
+
 # Кандидаты селекторов для формы логина. Priority у всех чуть разный,
 # поэтому пробуем несколько вариантов; если не сработает — залогинишься руками.
 USER_SELECTORS = [
@@ -270,6 +276,112 @@ def _slug(s):
     return re.sub(r"[^\w]+", "_", s).strip("_") or "tab"
 
 
+# --- режим batch: пройтись по заявкам и выгрузить вкладки, назвав по SC -----
+
+def _read_sc(page):
+    """Попытаться прочитать номер текущей заявки (SC########) для имени файла."""
+    # 1) текущее выбранное поле
+    for sel in [".priCurrentFieldStyle input", ".priCurrentFieldStyle"]:
+        try:
+            el = page.locator(sel).first
+            if el.count():
+                try:
+                    v = el.input_value()
+                except Exception:
+                    v = el.inner_text()
+                m = re.search(r"SC\d{6,8}", v or "")
+                if m:
+                    return m.group(0)
+        except Exception:
+            pass
+    # 2) любое поле ввода на странице со значением SC…
+    try:
+        vals = page.eval_on_selector_all("input", "els => els.map(e => e.value || '')")
+        for v in vals:
+            m = re.search(r"SC\d{6,8}", v or "")
+            if m:
+                return m.group(0)
+    except Exception:
+        pass
+    return None
+
+
+def _next_record(page):
+    """Перейти к следующей заявке. Лучшая догадка — стрелка вниз в гриде."""
+    try:
+        page.keyboard.press("ArrowDown")
+    except Exception:
+        pass
+
+
+def cmd_batch():
+    """
+    Пройтись по заявкам сверху вниз (SC26000193 → SC26000192 → …), для каждой
+    выгрузить 4 вкладки (скриншот + текст), назвав файлы по номеру SC.
+    Сначала запускается на BATCH_LIMIT заявках (по умолчанию 5) — как тест.
+    """
+    _require_url()
+    if not AUTH_FILE.exists():
+        sys.exit("❌ Нет сессии. Сначала: python scrape.py setup")
+
+    out = OUTPUT_DIR / "batch"
+    out.mkdir(parents=True, exist_ok=True)
+    log_path = out / "_log.txt"
+    logs = []
+
+    def L(msg):
+        print(msg)
+        logs.append(msg)
+        log_path.write_text("\n".join(logs), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = _launch(pw, headless=False)
+        context = browser.new_context(
+            storage_state=str(AUTH_FILE), accept_downloads=True
+        )
+        page = context.new_page()
+        page.goto(URL, wait_until="domcontentloaded")
+
+        print("\n" + "=" * 60)
+        print("Открой экран קריאות שרות (список заявок) и КЛИКНИ по ПЕРВОЙ")
+        print(f"заявке ({SC_FROM}) — так, чтобы снизу появились вкладки.")
+        print("Потом вернись сюда и нажми Enter.")
+        print("=" * 60)
+        input("\n[Enter] когда первая заявка открыта… ")
+
+        L(f"Старт. Лимит за прогон: {BATCH_LIMIT} заявок.")
+        seen = set()
+        for n in range(BATCH_LIMIT):
+            sc = _read_sc(page) or f"UNKNOWN_{n + 1:04d}"
+            L(f"[{n + 1}/{BATCH_LIMIT}] SC = {sc}")
+
+            if sc in seen:
+                L(f"  ⚠ SC повторился ({sc}) — переход на следующую заявку НЕ")
+                L("     сработал. Останавливаюсь, чтобы не плодить дубли.")
+                break
+            seen.add(sc)
+
+            for j, tab in enumerate(BATCH_TABS, 1):
+                try:
+                    page.get_by_role("button", name=tab).first.click()
+                    page.wait_for_timeout(1200)
+                    _dump_tab(page, out, f"{sc}_{j}_{_slug(tab)}", tab_label=tab)
+                    L(f"    ✓ {tab}")
+                except Exception as e:
+                    L(f"    ⚠ {tab}: {e}")
+
+            if SC_TO and sc == SC_TO:
+                L(f"Достигнут SC_TO={SC_TO}. Стоп.")
+                break
+
+            _next_record(page)
+            page.wait_for_timeout(1200)
+
+        L(f"\n✓ Готово. Обработано уникальных заявок: {len(seen)}")
+        L(f"  Папка: {out}")
+        browser.close()
+
+
 def _dump_tab(page, out, name, tab_label=None):
     """Скриншот + весь текст страницы + текст из iframe'ов + HTML-таблицы."""
     import pandas as pd
@@ -322,6 +434,7 @@ def main():
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("setup", help="залогиниться и сохранить сессию (один раз)")
     sub.add_parser("discover", help="изучить структуру ОДНОЙ заявки (все вкладки)")
+    sub.add_parser("batch", help="пройти по заявкам, выгрузить вкладки, назвать по SC")
     sub.add_parser("run", help="выгрузить данные, используя сохранённую сессию")
     args = parser.parse_args()
 
@@ -329,6 +442,8 @@ def main():
         cmd_setup()
     elif args.cmd == "discover":
         cmd_discover()
+    elif args.cmd == "batch":
+        cmd_batch()
     elif args.cmd == "run":
         cmd_run()
 
