@@ -394,12 +394,16 @@ def cmd_batch():
         browser.close()
 
 
-def _dump_tab(page, out, name, tab_label=None):
-    """Скриншот + весь текст страницы + текст из iframe'ов + HTML-таблицы."""
-    import pandas as pd
+# маркеры служебного iframe редактора (панель шрифтов + внутренний JS) — их пропускаем
+_EDITOR_NOISE = ("SpellCheckAddWord", "Comic Sans MS", "Wingdings")
 
+
+def _dump_tab(page, out, name, tab_label=None):
+    """Скриншот (JPEG) + очищенный текст страницы + текст из редакторов."""
     try:
-        page.screenshot(path=str(out / f"{name}.png"), full_page=True)
+        page.screenshot(
+            path=str(out / f"{name}.jpg"), type="jpeg", quality=75, full_page=True
+        )
     except Exception:
         pass
 
@@ -407,34 +411,28 @@ def _dump_tab(page, out, name, tab_label=None):
     if tab_label:
         lines.append(f"# Вкладка: {tab_label}\n")
 
-    # 1) текст основной страницы
+    # текст основной страницы — без пустых ячеек грида и стрелок
     try:
+        raw = page.locator("body").inner_text()
+        cleaned = [s.strip() for s in raw.splitlines()
+                   if s.strip() not in ("", "►", "◄")]
         lines.append("=== ТЕКСТ СТРАНИЦЫ ===")
-        lines.append(page.locator("body").inner_text())
+        lines.append("\n".join(cleaned))
     except Exception as e:
         lines.append(f"(не смог прочитать текст страницы: {e})")
 
-    # 2) текст из iframe'ов — сюда попадёт редактор תאור התקלה
-    for idx, fr in enumerate(page.frames):
+    # содержимое редакторов (описание неисправности / ремонта / диалог)
+    for fr in page.frames:
         if fr == page.main_frame:
             continue
         try:
-            txt = fr.locator("body").inner_text()
-            if txt.strip():
-                lines.append(f"\n=== IFRAME #{idx} ({fr.url}) ===")
-                lines.append(txt)
+            txt = fr.locator("body").inner_text().strip()
         except Exception:
-            pass
-
-    # 3) HTML-таблицы (сетки עבודה/חלקים, если это настоящие <table>)
-    try:
-        tables = pd.read_html(page.content())
-        lines.append(f"\n=== HTML-ТАБЛИЦ НА СТРАНИЦЕ: {len(tables)} ===")
-        for t_i, df in enumerate(tables, 1):
-            lines.append(f"\n--- таблица {t_i} ({df.shape[0]}×{df.shape[1]}) ---")
-            lines.append(df.head(20).to_string())
-    except Exception:
-        lines.append("\n(HTML-таблиц не найдено — сетки могут быть не <table>)")
+            continue
+        if not txt or any(m in txt for m in _EDITOR_NOISE):
+            continue
+        lines.append("\n=== ТЕКСТ ИЗ РЕДАКТОРА ===")
+        lines.append(txt)
 
     (out / f"{name}.txt").write_text("\n".join(lines), encoding="utf-8")
 
