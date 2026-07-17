@@ -306,24 +306,42 @@ def _read_sc(page):
     return None
 
 
-def _next_record(page):
-    """
-    Перейти к следующей заявке так же, как это делает человек:
-    ESC — выйти из вкладок обратно на экран выбора заявок,
-    ArrowDown — перейти на строку ниже (следующий SC).
-    """
-    # ESC возвращает фокус на грид со списком заявок
+def _return_to_grid(page):
+    """ESC — выйти из вкладок обратно на экран выбора заявок."""
     page.keyboard.press("Escape")
-    page.wait_for_timeout(600)
-    # на некоторых экранах нужен второй ESC — он безвреден, если уже на гриде
+    page.wait_for_timeout(400)
     page.keyboard.press("Escape")
-    page.wait_for_timeout(600)
-    # стрелка вниз по текущему полю грида — на следующую заявку
+    page.wait_for_timeout(400)
+
+
+def _press_down(page):
+    """Стрелка вниз по текущему полю грида — на строку ниже."""
     try:
         page.locator(".priCurrentFieldStyle").first.press("ArrowDown")
     except Exception:
         page.keyboard.press("ArrowDown")
-    page.wait_for_timeout(800)
+
+
+def _advance(page, current_sc, tries=6):
+    """
+    Перейти к СЛЕДУЮЩЕЙ (другой) заявке, повторяя попытки: грид иногда не
+    успевает переключиться с первого раза. Возвращает новый SC или None,
+    если после нескольких попыток так и не сдвинулись (конец списка / залипло).
+    """
+    for _ in range(tries):
+        _return_to_grid(page)
+        _press_down(page)
+        page.wait_for_timeout(900)
+        new_sc = _read_sc(page)
+        if new_sc and new_sc != current_sc:
+            return new_sc
+        # не сдвинулись — подтолкнём грид прокруткой и попробуем ещё раз
+        try:
+            page.mouse.wheel(0, 300)
+        except Exception:
+            pass
+        page.wait_for_timeout(700)
+    return None
 
 
 def cmd_batch():
@@ -363,13 +381,15 @@ def cmd_batch():
 
         L(f"Старт. Лимит за прогон: {BATCH_LIMIT} заявок.")
         seen = set()
-        for n in range(BATCH_LIMIT):
-            sc = _read_sc(page) or f"UNKNOWN_{n + 1:04d}"
-            L(f"[{n + 1}/{BATCH_LIMIT}] SC = {sc}")
+        sc = _read_sc(page) or "UNKNOWN_0001"
+        n = 0
+        while n < BATCH_LIMIT:
+            n += 1
+            L(f"[{n}/{BATCH_LIMIT}] SC = {sc}")
 
             if sc in seen:
-                L(f"  ⚠ SC повторился ({sc}) — переход на следующую заявку НЕ")
-                L("     сработал. Останавливаюсь, чтобы не плодить дубли.")
+                # сюда почти не попадаем (переход теперь с повторами), но на всякий
+                L(f"  ⚠ SC повторился ({sc}) — останавливаюсь, чтобы не плодить дубли.")
                 break
             seen.add(sc)
 
@@ -386,8 +406,14 @@ def cmd_batch():
                 L(f"Достигнут SC_TO={SC_TO}. Стоп.")
                 break
 
-            _next_record(page)
-            page.wait_for_timeout(1200)
+            # перейти к следующей заявке (с повторными попытками)
+            next_sc = _advance(page, sc)
+            if not next_sc:
+                L(f"  ⚠ После нескольких попыток не удалось перейти дальше от {sc}.")
+                L("     Похоже, это конец списка (или залипло). Останавливаюсь.")
+                L(f"     Чтобы продолжить позже — выбери в гриде {sc}, запусти batch снова.")
+                break
+            sc = next_sc
 
         L(f"\n✓ Готово. Обработано уникальных заявок: {len(seen)}")
         L(f"  Папка: {out}")
