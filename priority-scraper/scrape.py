@@ -49,6 +49,15 @@ BATCH_LIMIT = int(os.getenv("BATCH_LIMIT", "5") or "5")   # сколько за�
 SC_FROM = os.getenv("SC_FROM", "SC26000193").strip()
 SC_TO = os.getenv("SC_TO", "").strip()                    # напр. SC22000001; пусто = не проверять
 
+# Настройки скорости (можно менять через переменные окружения):
+#   TAB_WAIT — пауза после клика по вкладке, мс (меньше = быстрее, но есть риск
+#              снять вкладку до того, как она дорисовалась)
+#   NAV_WAIT — пауза после перехода на следующую заявку, мс
+#   SHOTS    — скриншоты: fast (видимая часть, быстро) | full (вся страница) | off
+TAB_WAIT = int(os.getenv("TAB_WAIT", "700") or "700")
+NAV_WAIT = int(os.getenv("NAV_WAIT", "600") or "600")
+SHOTS = (os.getenv("SHOTS", "fast") or "fast").strip().lower()
+
 # Кандидаты селекторов для формы логина. Priority у всех чуть разный,
 # поэтому пробуем несколько вариантов; если не сработает — залогинишься руками.
 USER_SELECTORS = [
@@ -309,9 +318,9 @@ def _read_sc(page):
 def _return_to_grid(page):
     """ESC — выйти из вкладок обратно на экран выбора заявок."""
     page.keyboard.press("Escape")
-    page.wait_for_timeout(400)
+    page.wait_for_timeout(250)
     page.keyboard.press("Escape")
-    page.wait_for_timeout(400)
+    page.wait_for_timeout(250)
 
 
 def _press_down(page):
@@ -328,19 +337,19 @@ def _advance(page, current_sc, tries=6):
     успевает переключиться с первого раза. Возвращает новый SC или None,
     если после нескольких попыток так и не сдвинулись (конец списка / залипло).
     """
-    for _ in range(tries):
+    for attempt in range(tries):
         _return_to_grid(page)
         _press_down(page)
-        page.wait_for_timeout(900)
+        page.wait_for_timeout(NAV_WAIT)
         new_sc = _read_sc(page)
         if new_sc and new_sc != current_sc:
             return new_sc
-        # не сдвинулись — подтолкнём грид прокруткой и попробуем ещё раз
+        # не сдвинулись — на повторных попытках ждём дольше и подталкиваем грид
         try:
             page.mouse.wheel(0, 300)
         except Exception:
             pass
-        page.wait_for_timeout(700)
+        page.wait_for_timeout(500 + attempt * 300)
     return None
 
 
@@ -396,7 +405,7 @@ def cmd_batch():
             for j, tab in enumerate(BATCH_TABS, 1):
                 try:
                     page.get_by_role("button", name=tab).first.click()
-                    page.wait_for_timeout(1200)
+                    page.wait_for_timeout(TAB_WAIT)
                     _dump_tab(page, out, f"{sc}_{j}_{_slug(tab)}", tab_label=tab)
                     L(f"    ✓ {tab}")
                 except Exception as e:
@@ -426,12 +435,14 @@ _EDITOR_NOISE = ("SpellCheckAddWord", "Comic Sans MS", "Wingdings")
 
 def _dump_tab(page, out, name, tab_label=None):
     """Скриншот (JPEG) + очищенный текст страницы + текст из редакторов."""
-    try:
-        page.screenshot(
-            path=str(out / f"{name}.jpg"), type="jpeg", quality=75, full_page=True
-        )
-    except Exception:
-        pass
+    if SHOTS != "off":
+        try:
+            page.screenshot(
+                path=str(out / f"{name}.jpg"), type="jpeg", quality=65,
+                full_page=(SHOTS == "full"),
+            )
+        except Exception:
+            pass
 
     lines = []
     if tab_label:
