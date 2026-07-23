@@ -1,0 +1,27 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Tanks"
+config/description="Top-down tank action prototype inspired by Battle City."
+run/main_scene="res://battle_city_test.tscn"
+config/features=PackedStringArray("4.6", "Forward Plus")
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=896
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand_keep_height"
+
+[rendering]
+
+environment/defaults/default_clear_color=Color(0.035, 0.04, 0.045, 1)
