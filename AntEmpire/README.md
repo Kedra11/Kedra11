@@ -27,8 +27,32 @@
   тратами.
 - **Core** — `GameManager`: bootstrap сервисов, автосейв-таймер, сохранение
   при сворачивании приложения.
-- Заглушки с TODO: `AntController`, `AntStateMachine`, `WorkerAntCollector`,
-  `QueenController`, `RoomController`, `OfflineProgressService`.
+- **Ants (прототип рабочего муравья, этап 4)** — `AntStateMachine`
+  (Idle → SearchResource → MoveToResource → CollectResource → ReturnToNest →
+  DepositResource, чистый C#), `AntController` (движение, реализация
+  `IAntAgent`), `WorkerAntCollector` («рюкзак» муравья), `AntTypeData`
+  (ScriptableObject-конфиг: скорость, вместимость, время сбора),
+  `AntSpawner` (восстановление популяции из сейва + `HatchWorker()` для
+  будущего инкубатора), `PlaceholderAntVisual` (муравей из примитивов).
+- **World** — `ResourceNode` (узлы ресурсов с истощением, визуальным
+  уменьшением и восстановлением; поиск ближайшего без физики),
+  `NestEntrance` (вход в гнездо).
+- **Sandbox** — `PrototypeSandbox`: собирает тестовую сцену из примитивов
+  одним компонентом (земля, гнездо, узлы ресурсов, муравьи, камера, свет,
+  HUD ресурсов).
+- Заглушки с TODO: `QueenController`, `RoomController`,
+  `OfflineProgressService`.
+
+## Как запустить прототип (муравьи уже бегают!)
+
+1. Открой проект в Unity (см. ниже).
+2. **File → New Scene** (пустая сцена, можно без сохранения).
+3. Создай пустой GameObject: **GameObject → Create Empty**.
+4. Добавь ему компонент **PrototypeSandbox** (кнопка Add Component → набери
+   `PrototypeSandbox`).
+5. Нажми **Play** ▶ — 3 муравья побегут к листьям и еде, принесут ресурсы в
+   гнездо, счётчики Food/Leaves вырастут. Останови и запусти Play снова —
+   прогресс сохранится (JSON-сейв в `persistentDataPath`).
 
 ## Дорожная карта (из дизайн-документа)
 

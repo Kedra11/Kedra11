@@ -1,15 +1,42 @@
+using AntEmpire.Economy;
+
 namespace AntEmpire.Ants
 {
     /// <summary>
-    /// The collecting logic of a worker ant: how much it carries, which
-    /// resource node it targets, and depositing into the ResourceManager.
+    /// The ant's "backpack": what it is carrying right now. Pure C#.
+    ///
+    /// Capacity comes from AntTypeData (× evolution multipliers later);
+    /// the collector itself just holds and hands over the load.
     /// </summary>
     public class WorkerAntCollector
     {
-        // TODO: carryCapacity from AntTypeData × evolution multiplier.
-        // TODO: pick nearest resource node (surface scene).
-        // TODO: on deposit: ResourceManager.Add(type, carriedAmount).
-        // TODO: hook for the future "Colony Memory" trail-speed mechanic —
-        //       count trips per route so often-used routes get faster.
+        public ResourceType CarriedType { get; private set; }
+        public double CarriedAmount { get; private set; }
+        public bool IsCarrying => CarriedAmount > 0;
+
+        /// <summary>Put gathered resources into the backpack (replaces any previous load).</summary>
+        public void Take(ResourceType type, double amount)
+        {
+            if (amount <= 0)
+            {
+                return;
+            }
+            CarriedType = type;
+            CarriedAmount = amount;
+        }
+
+        /// <summary>Empty the backpack into the colony economy.</summary>
+        public void DepositInto(ResourceManager resourceManager)
+        {
+            if (!IsCarrying)
+            {
+                return;
+            }
+            resourceManager.Add(CarriedType, CarriedAmount);
+            CarriedAmount = 0;
+        }
+
+        // TODO (Colony Memory): count completed trips per route here so
+        // frequently used routes give a speed bonus and draw a visible trail.
     }
 }
