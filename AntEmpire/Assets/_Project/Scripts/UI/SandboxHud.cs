@@ -9,14 +9,17 @@ using UnityEngine;
 namespace AntEmpire.UI
 {
     /// <summary>
-    /// Dev-only HUD for the prototype sandbox, drawn with IMGUI so it needs
-    /// zero scene setup: resource readout, population, queen status and
-    /// room upgrade buttons.
+    /// Dev HUD for the prototype sandbox (IMGUI, zero scene setup).
     ///
-    /// The real game will replace this with a proper HUD (MainHUD /
-    /// ResourcePanel / RoomPanel) — per CLAUDE.md, UI listens to economy
-    /// events and never computes economy. Room costs shown here come from
-    /// RoomService, never calculated in UI.
+    /// Layout, after playtest feedback ("the menu covers half the screen and
+    /// the bottom is cut off"):
+    /// - a compact two-line stat bar at the top left;
+    /// - event banners at the top right;
+    /// - everything interactive lives in a collapsible, scrollable Menu
+    ///   panel so the meadow stays visible and nothing is clipped.
+    ///
+    /// Per CLAUDE.md the UI never computes economy — all values and costs
+    /// come from the services.
     /// </summary>
     public class SandboxHud : MonoBehaviour
     {
@@ -24,7 +27,12 @@ namespace AntEmpire.UI
         private CameraViewSwitcher _viewSwitcher;
         private SpiderAttackEvent _spiderEvent;
         private AntSpawner _spawner;
+
+        private bool _menuOpen;
+        private Vector2 _menuScroll;
+
         private GUIStyle _labelStyle;
+        private GUIStyle _smallStyle;
         private GUIStyle _alertStyle;
         private GUIStyle _buttonStyle;
 
@@ -45,140 +53,216 @@ namespace AntEmpire.UI
             }
 
             EnsureStyles();
+            DrawTopBar(game);
+            DrawBanners();
+            if (_menuOpen)
+            {
+                DrawMenu(game);
+            }
+            DrawOfflinePopup(game);
+        }
 
+        // ---- Top bar ----------------------------------------------------------
+
+        private void DrawTopBar(GameManager game)
+        {
             ResourceManager resources = game.ResourceManager;
             RoomService rooms = game.RoomService;
-            int population = game.SaveManager.Data.GetAntCount(AntIds.Worker);
+            int workers = game.SaveManager.Data.GetAntCount(AntIds.Worker);
+            int soldiers = game.SaveManager.Data.GetAntCount(AntIds.Soldier);
+            int scouts = game.SaveManager.Data.GetAntCount(AntIds.Scout);
+            int total = workers + soldiers + scouts;
+            int cap = rooms.PopulationCap + game.Queen.BonusPopulationCap;
 
-            GUILayout.BeginArea(new Rect(20, 15, Screen.width * 0.48f, Screen.height - 30));
+            GUILayout.BeginArea(new Rect(15, 10, Screen.width * 0.62f, Screen.height * 0.24f));
 
-            // -- Event banner ---------------------------------------------------
+            GUILayout.Label(
+                $"Food {resources.Get(ResourceType.Food):0}/{rooms.FoodCapacity:0}    " +
+                $"Leaves {resources.Get(ResourceType.Leaves):0}    " +
+                $"Soil {resources.Get(ResourceType.Soil):0}    " +
+                $"DNA {resources.Get(ResourceType.DNA):0}",
+                _smallStyle);
+            GUILayout.Label(
+                $"Pop {total}/{cap} (W{workers} S{soldiers} C{scouts})    " +
+                $"Queen Lv{game.Queen.Level}    Evo Lv{game.Evolution.GetLevel()}",
+                _smallStyle);
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button(_menuOpen ? "Menu ▲" : "Menu ▼", _buttonStyle, GUILayout.ExpandWidth(false)))
+            {
+                _menuOpen = !_menuOpen;
+            }
+            if (_viewSwitcher != null &&
+                GUILayout.Button(_viewSwitcher.IsUnderground ? "Surface" : "Ant farm", _buttonStyle, GUILayout.ExpandWidth(false)))
+            {
+                _viewSwitcher.Toggle();
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.EndArea();
+        }
+
+        // ---- Event banners (top right) ---------------------------------------
+
+        private void DrawBanners()
+        {
+            GUILayout.BeginArea(new Rect(Screen.width * 0.64f, 10, Screen.width * 0.34f, Screen.height * 0.3f));
+
             if (RainEvent.IsRaining)
             {
-                GUILayout.Label("Rain — everyone moves slower…", _alertStyle);
-                GUILayout.Space(6);
+                GUILayout.Label("Rain — everyone slows down…", _alertStyle);
             }
+
             if (_spiderEvent != null)
             {
                 if (_spiderEvent.ActiveSpider != null)
                 {
                     GUILayout.Label(
-                        $"SPIDER ATTACK!  HP {_spiderEvent.ActiveSpider.Health:0}/{_spiderEvent.ActiveSpider.MaxHealth:0}" +
-                        "  — workers near it bite it!",
+                        $"SPIDER ATTACK!  HP {_spiderEvent.ActiveSpider.Health:0}/{_spiderEvent.ActiveSpider.MaxHealth:0}",
                         _alertStyle);
-                    GUILayout.Space(6);
                 }
                 else if (Time.time < _spiderEvent.ResultVisibleUntil)
                 {
                     GUILayout.Label(_spiderEvent.ResultMessage, _alertStyle);
-                    GUILayout.Space(6);
                 }
             }
 
-            // -- View toggle ----------------------------------------------------
-            if (_viewSwitcher != null)
-            {
-                string viewLabel = _viewSwitcher.IsUnderground
-                    ? "Go to Surface"
-                    : "Go Underground (ant farm)";
-                if (GUILayout.Button(viewLabel, _buttonStyle))
-                {
-                    _viewSwitcher.Toggle();
-                }
-                GUILayout.Space(8);
-            }
+            GUILayout.EndArea();
+        }
 
-            // -- Resources ------------------------------------------------------
-            GUILayout.Label(
-                $"Food: {resources.Get(ResourceType.Food):0} / {rooms.FoodCapacity:0}", _labelStyle);
-            GUILayout.Label($"Leaves: {resources.Get(ResourceType.Leaves):0}", _labelStyle);
-            GUILayout.Label($"Soil: {resources.Get(ResourceType.Soil):0}", _labelStyle);
-            GUILayout.Label($"DNA: {resources.Get(ResourceType.DNA):0}", _labelStyle);
-            GUILayout.Space(8);
-            int totalPopulation = _spawner != null ? _spawner.TotalPopulation : population;
-            int populationCap = rooms.PopulationCap + game.Queen.BonusPopulationCap;
-            int soldiers = game.SaveManager.Data.GetAntCount(AntIds.Soldier);
-            int scouts = game.SaveManager.Data.GetAntCount(AntIds.Scout);
-            GUILayout.Label(
-                $"Population: {totalPopulation} / {populationCap}  (workers {population}, soldiers {soldiers}, scouts {scouts})",
-                _labelStyle);
+        // ---- Collapsible menu -------------------------------------------------
 
-            // -- Job assignment (workers only) ----------------------------------
+        private void DrawMenu(GameManager game)
+        {
+            float top = Screen.height * 0.25f;
+            Rect rect = new Rect(15, top, Screen.width * 0.42f, Screen.height - top - 15);
+            GUI.Box(rect, GUIContent.none);
+            GUILayout.BeginArea(rect);
+            _menuScroll = GUILayout.BeginScrollView(_menuScroll);
+
+            DrawJobsSection(game);
+            DrawHatchSection(game);
+            DrawQueenSection(game);
+            DrawEvolutionSection(game);
+            DrawRoomsSection(game);
+
+            GUILayout.Space(10);
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+        }
+
+        private void DrawJobsSection(GameManager game)
+        {
+            int workers = game.SaveManager.Data.GetAntCount(AntIds.Worker);
             WorkforceService workforce = game.Workforce;
+
+            GUILayout.Label("— Worker jobs —", _labelStyle);
             foreach (ResourceType type in WorkforceService.AssignableResources)
             {
-                DrawJobRow(workforce, type, population);
-            }
-            GUILayout.Label($"Auto (nearest): {workforce.FreeWorkers(population)}", _labelStyle);
-
-            // -- Hatch specialists ----------------------------------------------
-            if (_spawner != null)
-            {
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Hatch Soldier — 10 Food", _buttonStyle))
+                GUILayout.Label($"On {type}: {workforce.GetTarget(type)}", _smallStyle, GUILayout.ExpandWidth(false));
+                float size = _smallStyle.fontSize * 1.9f;
+                if (GUILayout.Button("-", _buttonStyle, GUILayout.Width(size), GUILayout.Height(size)))
                 {
-                    _spawner.TryHatchSoldier();
+                    workforce.TryAdjust(type, -1, workers);
                 }
-                if (GUILayout.Button("Hatch Scout — 15 Food", _buttonStyle))
+                if (GUILayout.Button("+", _buttonStyle, GUILayout.Width(size), GUILayout.Height(size)))
                 {
-                    _spawner.TryHatchScout();
+                    workforce.TryAdjust(type, +1, workers);
                 }
                 GUILayout.EndHorizontal();
             }
+            GUILayout.Label($"Auto (nearest): {workforce.FreeWorkers(workers)}", _smallStyle);
 
-            // -- Queen status ---------------------------------------------------
-            if (_queen != null)
+            if (_queen != null && !string.IsNullOrEmpty(_queen.PausedReason))
             {
-                string queenLine = string.IsNullOrEmpty(_queen.PausedReason)
-                    ? $"Queen: next larva {Mathf.RoundToInt(_queen.BirthProgress * 100f)}%"
-                    : $"Queen: {_queen.PausedReason}";
-                GUILayout.Label(queenLine, _labelStyle);
+                GUILayout.Label($"Queen: {_queen.PausedReason}", _smallStyle);
+            }
+            GUILayout.Space(8);
+        }
+
+        private void DrawHatchSection(GameManager game)
+        {
+            if (_spawner == null)
+            {
+                return;
             }
 
-            // -- Queen evolution ------------------------------------------------
-            QueenService queenService = game.Queen;
-            GUILayout.Space(6);
-            GUILayout.Label($"Queen: Lv {queenService.Level} / {QueenService.MaxLevel}", _labelStyle);
-            if (queenService.Level < QueenService.MaxLevel)
+            GUILayout.Label("— Hatch specialists —", _labelStyle);
+            if (GUILayout.Button("Hatch Soldier — 10 Food", _buttonStyle))
             {
-                var (queenFood, queenDna) = queenService.UpgradeCost;
-                bool guiWasEnabled = GUI.enabled;
-                GUI.enabled = queenService.CanUpgrade();
-                if (GUILayout.Button($"Upgrade Queen → Lv {queenService.Level + 1}:  {queenFood} Food  {queenDna} DNA", _buttonStyle))
+                _spawner.TryHatchSoldier();
+            }
+            if (GUILayout.Button("Hatch Scout — 15 Food", _buttonStyle))
+            {
+                _spawner.TryHatchScout();
+            }
+            GUILayout.Space(8);
+        }
+
+        private void DrawQueenSection(GameManager game)
+        {
+            QueenService queen = game.Queen;
+            GUILayout.Label($"— Queen: Lv {queen.Level}/{QueenService.MaxLevel} —", _labelStyle);
+            if (queen.Level < QueenService.MaxLevel)
+            {
+                var (food, dna) = queen.UpgradeCost;
+                bool wasEnabled = GUI.enabled;
+                GUI.enabled = queen.CanUpgrade();
+                if (GUILayout.Button($"Upgrade → Lv {queen.Level + 1}:  {food} Food  {dna} DNA", _buttonStyle))
                 {
-                    queenService.TryUpgrade();
+                    queen.TryUpgrade();
                 }
-                GUI.enabled = guiWasEnabled;
+                GUI.enabled = wasEnabled;
             }
+            GUILayout.Space(8);
+        }
 
-            // -- Evolution ------------------------------------------------------
+        private void DrawEvolutionSection(GameManager game)
+        {
             EvolutionService evolution = game.Evolution;
-            GUILayout.Space(6);
-            GUILayout.Label($"Worker Evolution: Lv {evolution.GetLevel()} / {evolution.MaxLevel}", _labelStyle);
+            GUILayout.Label($"— Worker Evolution: Lv {evolution.GetLevel()}/{evolution.MaxLevel} —", _labelStyle);
             EvolutionLevelData next = evolution.Next;
             if (next != null)
             {
                 bool wasEnabled = GUI.enabled;
                 GUI.enabled = evolution.CanEvolve();
-                if (GUILayout.Button($"Evolve → Lv {next.level}:  {FormatCost(next.foodCost, 0, 0)} {next.dnaCost} DNA", _buttonStyle))
+                if (GUILayout.Button($"Evolve → Lv {next.level}:  {next.foodCost} Food  {next.dnaCost} DNA", _buttonStyle))
                 {
                     evolution.TryEvolve();
                 }
                 GUI.enabled = wasEnabled;
             }
+            GUILayout.Space(8);
+        }
 
-            GUILayout.Space(10);
-
-            // -- Room upgrade buttons ------------------------------------------
+        private void DrawRoomsSection(GameManager game)
+        {
+            RoomService rooms = game.RoomService;
+            GUILayout.Label("— Rooms —", _labelStyle);
             foreach (RoomTypeData config in rooms.Configs)
             {
-                DrawRoomButton(rooms, config);
+                int level = rooms.GetLevel(config.id);
+                if (rooms.IsMaxLevel(config.id))
+                {
+                    GUILayout.Label($"{config.displayName}  Lv {level} (MAX)", _smallStyle);
+                    continue;
+                }
+
+                var (food, leaves, soil) = rooms.GetUpgradeCost(config.id);
+                string action = level == 0 ? "Build" : $"Lv {level} → {level + 1}";
+
+                bool wasEnabled = GUI.enabled;
+                GUI.enabled = rooms.CanUpgrade(config.id);
+                if (GUILayout.Button($"{config.displayName} ({action}):  {FormatCost(food, leaves, soil)}", _buttonStyle))
+                {
+                    rooms.TryUpgrade(config.id);
+                }
+                GUI.enabled = wasEnabled;
             }
-
-            GUILayout.EndArea();
-
-            DrawOfflinePopup(game); // drawn last so it sits on top
         }
+
+        // ---- Offline popup ----------------------------------------------------
 
         private void DrawOfflinePopup(GameManager game)
         {
@@ -216,6 +300,8 @@ namespace AntEmpire.UI
             GUILayout.EndArea();
         }
 
+        // ---- Helpers ----------------------------------------------------------
+
         private static string FormatDuration(long seconds)
         {
             if (seconds >= 3600)
@@ -223,51 +309,6 @@ namespace AntEmpire.UI
                 return $"{seconds / 3600}h {seconds % 3600 / 60}m";
             }
             return seconds >= 60 ? $"{seconds / 60}m" : $"{seconds}s";
-        }
-
-        private void DrawJobRow(WorkforceService workforce, ResourceType type, int population)
-        {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label($"  On {type}: {workforce.GetTarget(type)}", _labelStyle, GUILayout.ExpandWidth(false));
-            GUILayout.Space(10);
-
-            float buttonSize = _labelStyle.fontSize * 1.6f;
-            if (GUILayout.Button("-", _buttonStyle, GUILayout.Width(buttonSize), GUILayout.Height(buttonSize)))
-            {
-                workforce.TryAdjust(type, -1, population);
-            }
-            if (GUILayout.Button("+", _buttonStyle, GUILayout.Width(buttonSize), GUILayout.Height(buttonSize)))
-            {
-                workforce.TryAdjust(type, +1, population);
-            }
-            GUILayout.EndHorizontal();
-        }
-
-        private void DrawRoomButton(RoomService rooms, RoomTypeData config)
-        {
-            int level = rooms.GetLevel(config.id);
-
-            if (rooms.IsMaxLevel(config.id))
-            {
-                GUILayout.Label($"{config.displayName}  Lv {level} (MAX)", _labelStyle);
-                return;
-            }
-
-            var (food, leaves, soil) = rooms.GetUpgradeCost(config.id);
-            string action = level == 0 ? "Build" : "Upgrade";
-
-            // Room name on its own line, the button carries only action + cost,
-            // so the price is always fully visible.
-            GUILayout.Label($"{config.displayName}  Lv {level}", _labelStyle);
-
-            bool previousEnabled = GUI.enabled;
-            GUI.enabled = rooms.CanUpgrade(config.id);
-            if (GUILayout.Button($"{action} → Lv {level + 1}:  {FormatCost(food, leaves, soil)}", _buttonStyle))
-            {
-                rooms.TryUpgrade(config.id);
-            }
-            GUI.enabled = previousEnabled;
-            GUILayout.Space(6);
         }
 
         private static string FormatCost(int food, int leaves, int soil)
@@ -286,13 +327,20 @@ namespace AntEmpire.UI
                 return;
             }
 
-            int fontSize = Mathf.RoundToInt(Screen.height * 0.028f);
+            int fontSize = Mathf.Max(12, Mathf.RoundToInt(Screen.height * 0.021f));
+
             _labelStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = fontSize,
                 fontStyle = FontStyle.Bold
             };
             _labelStyle.normal.textColor = Color.white;
+
+            _smallStyle = new GUIStyle(_labelStyle)
+            {
+                fontSize = Mathf.RoundToInt(fontSize * 0.9f),
+                fontStyle = FontStyle.Normal
+            };
 
             _alertStyle = new GUIStyle(_labelStyle) { wordWrap = true };
             _alertStyle.normal.textColor = new Color(1f, 0.45f, 0.2f);
@@ -301,8 +349,8 @@ namespace AntEmpire.UI
             {
                 fontSize = Mathf.RoundToInt(fontSize * 0.85f),
                 alignment = TextAnchor.MiddleLeft,
-                padding = new RectOffset(10, 10, 8, 8),
-                wordWrap = true // never clip the upgrade cost
+                padding = new RectOffset(8, 8, 6, 6),
+                wordWrap = true
             };
         }
     }
