@@ -149,7 +149,7 @@ namespace AntEmpire.Core
             switcher.Configure(
                 surfacePose: new Pose(camera.transform.position, camera.transform.rotation),
                 undergroundPose: new Pose(
-                    UndergroundCenter + new Vector3(0f, 3.6f, -10.5f),
+                    UndergroundCenter + new Vector3(0f, 3.6f, -14.5f),
                     Quaternion.LookRotation(Vector3.forward, Vector3.up)));
 
             if (Object.FindAnyObjectByType<Light>() == null)
