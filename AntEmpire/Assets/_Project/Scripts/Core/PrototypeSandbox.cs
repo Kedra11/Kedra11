@@ -23,7 +23,7 @@ namespace AntEmpire.Core
     {
         [Header("World")]
         [SerializeField] private int leafNodes = 5;
-        [SerializeField] private int foodNodes = 3;
+        [SerializeField] private int foodNodes = 4;
         [SerializeField] private float minNodeDistance = 4f;
         [SerializeField] private float maxNodeDistance = 9f;
 
@@ -104,12 +104,12 @@ namespace AntEmpire.Core
             for (int i = 0; i < leafNodes; i++)
             {
                 BuildNode(ResourceType.Leaves, PrimitiveType.Cube,
-                    new Vector3(0.7f, 0.35f, 0.7f), leafMaterial, amount: 20);
+                    new Vector3(0.7f, 0.35f, 0.7f), leafMaterial, amount: 45);
             }
             for (int i = 0; i < foodNodes; i++)
             {
                 BuildNode(ResourceType.Food, PrimitiveType.Sphere,
-                    new Vector3(0.55f, 0.55f, 0.55f), foodMaterial, amount: 15);
+                    new Vector3(0.55f, 0.55f, 0.55f), foodMaterial, amount: 40);
             }
         }
 
@@ -127,7 +127,7 @@ namespace AntEmpire.Core
             Object.Destroy(nodeObject.GetComponent<Collider>());
 
             nodeObject.AddComponent<ResourceNode>().Configure(
-                type, amount, regrowDelay: 25f,
+                type, amount, regrowDelay: 15f,
                 respawnCenter: Vector3.zero,
                 respawnMinDistance: minNodeDistance,
                 respawnMaxDistance: maxNodeDistance);
