@@ -3,6 +3,7 @@ using AntEmpire.Colony;
 using AntEmpire.Combat;
 using AntEmpire.Core;
 using AntEmpire.Economy;
+using AntEmpire.UI;
 using UnityEngine;
 
 namespace AntEmpire.Events
@@ -80,6 +81,10 @@ namespace AntEmpire.Events
             {
                 GameManager.Instance.ResourceManager.Add(ResourceType.DNA, dnaReward);
                 ResultMessage = $"Spider defeated!  +{dnaReward} DNA";
+                FloatingWorldText.Spawn(
+                    spider.transform.position + Vector3.up * 1.4f,
+                    $"+{dnaReward} DNA",
+                    new Color(0.75f, 0.45f, 1f));
             }
             else
             {

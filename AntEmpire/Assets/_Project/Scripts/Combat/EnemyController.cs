@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using AntEmpire.Ants;
 using AntEmpire.Economy;
 using UnityEngine;
@@ -57,6 +58,8 @@ namespace AntEmpire.Combat
         {
             switch (CurrentPhase)
             {
+                case Phase.Done:
+                    return;
                 case Phase.Approach:
                     if (StepTowards(_nestPosition, NestStopDistance))
                     {
@@ -162,6 +165,31 @@ namespace AntEmpire.Combat
             }
             CurrentPhase = Phase.Done;
             Finished?.Invoke(this, defeated);
+
+            if (defeated)
+            {
+                StartCoroutine(DeathCollapse());
+            }
+            else
+            {
+                Destroy(gameObject); // it walked off-screen anyway
+            }
+        }
+
+        /// <summary>Quick squash-flat death animation, then despawn.</summary>
+        private IEnumerator DeathCollapse()
+        {
+            Vector3 startScale = transform.localScale;
+            const float duration = 0.45f;
+            for (float t = 0f; t < duration; t += Time.deltaTime)
+            {
+                float k = t / duration;
+                transform.localScale = new Vector3(
+                    startScale.x * (1f + 0.3f * k),
+                    startScale.y * (1f - 0.92f * k),
+                    startScale.z * (1f + 0.3f * k));
+                yield return null;
+            }
             Destroy(gameObject);
         }
     }
