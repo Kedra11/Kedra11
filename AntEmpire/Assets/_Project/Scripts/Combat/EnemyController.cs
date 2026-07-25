@@ -44,7 +44,7 @@ namespace AntEmpire.Combat
         private Vector3 _fleeDirection;
         private float _stealTimer;
         private float _recruitTimer;
-        private float _strikeTimer = StrikeInterval;
+        private float _strikeTimer = 1.2f; // first strike lands soon after ants engage
 
         public Phase CurrentPhase { get; private set; } = Phase.Approach;
         public float MaxHealth { get; private set; }
@@ -139,31 +139,40 @@ namespace AntEmpire.Combat
         }
 
         /// <summary>The spider fights back: kills one worker in melee range
-        /// every few seconds. It never takes the colony's last worker.</summary>
+        /// every few seconds. The timer only runs while an ant is actually
+        /// in range, so the first kill lands shortly after the swarm arrives.
+        /// It never takes the colony's last worker.</summary>
         private void StrikeBack()
         {
-            if (CurrentPhase == Phase.Done)
+            if (CurrentPhase == Phase.Done || _spawner == null || _spawner.Ants.Count <= 1)
             {
                 return;
             }
 
-            _strikeTimer -= Time.deltaTime;
-            if (_strikeTimer > 0f || _spawner == null || _spawner.Ants.Count <= 1)
-            {
-                return;
-            }
-            _strikeTimer = StrikeInterval;
-
+            AntController victim = null;
             float strikeSqr = StrikeRadius * StrikeRadius;
             for (int i = 0; i < _spawner.Ants.Count; i++)
             {
                 AntController ant = _spawner.Ants[i];
                 if ((ant.transform.position - transform.position).sqrMagnitude <= strikeSqr)
                 {
-                    _spawner.KillWorker(ant);
-                    return;
+                    victim = ant;
+                    break;
                 }
             }
+
+            if (victim == null)
+            {
+                return; // nobody in reach — hold the strike
+            }
+
+            _strikeTimer -= Time.deltaTime;
+            if (_strikeTimer > 0f)
+            {
+                return;
+            }
+            _strikeTimer = StrikeInterval;
+            _spawner.KillWorker(victim);
         }
 
         private void ReleaseDefenders()

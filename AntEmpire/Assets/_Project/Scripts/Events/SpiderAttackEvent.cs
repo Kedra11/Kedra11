@@ -23,10 +23,13 @@ namespace AntEmpire.Events
         [SerializeField] private float minInterval = 70f;
         [SerializeField] private float maxInterval = 140f;
 
-        [Header("Balance")]
-        [SerializeField] private float spiderHealth = 25f;
-        [SerializeField] private int dnaReward = 10;
+        [Header("Balance — spider scales with the colony")]
+        [SerializeField] private float baseHealth = 20f;
+        [SerializeField] private float healthPerWorker = 3f;
+        [SerializeField] private int baseDnaReward = 10;
         [SerializeField] private float spawnDistance = 14f;
+
+        private int _currentReward;
 
         private AntSpawner _spawner;
         private float _timer;
@@ -67,8 +70,13 @@ namespace AntEmpire.Events
             spiderObject.transform.position = spawnPosition;
             spiderObject.AddComponent<PlaceholderSpiderVisual>();
 
+            // Bigger colonies face tougher spiders — and earn more DNA.
+            int workers = _spawner != null ? _spawner.Ants.Count : 3;
+            float health = baseHealth + healthPerWorker * workers;
+            _currentReward = baseDnaReward + workers / 2;
+
             ActiveSpider = spiderObject.AddComponent<EnemyController>();
-            ActiveSpider.Init(GameManager.Instance.ResourceManager, _spawner, nest, spiderHealth);
+            ActiveSpider.Init(GameManager.Instance.ResourceManager, _spawner, nest, health);
             ActiveSpider.Finished += OnSpiderFinished;
         }
 
@@ -79,11 +87,11 @@ namespace AntEmpire.Events
 
             if (defeated)
             {
-                GameManager.Instance.ResourceManager.Add(ResourceType.DNA, dnaReward);
-                ResultMessage = $"Spider defeated!  +{dnaReward} DNA";
+                GameManager.Instance.ResourceManager.Add(ResourceType.DNA, _currentReward);
+                ResultMessage = $"Spider defeated!  +{_currentReward} DNA";
                 FloatingWorldText.Spawn(
                     spider.transform.position + Vector3.up * 1.4f,
-                    $"+{dnaReward} DNA",
+                    $"+{_currentReward} DNA",
                     new Color(0.75f, 0.45f, 1f));
             }
             else
