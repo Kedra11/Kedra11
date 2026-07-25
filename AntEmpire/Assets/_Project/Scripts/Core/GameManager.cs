@@ -1,6 +1,7 @@
 using AntEmpire.Ants;
 using AntEmpire.Colony;
 using AntEmpire.Economy;
+using AntEmpire.OfflineProgress;
 using AntEmpire.Rooms;
 using AntEmpire.SaveSystem;
 using UnityEngine;
@@ -34,6 +35,10 @@ namespace AntEmpire.Core
         public WorkforceService Workforce { get; private set; }
         public EvolutionService Evolution { get; private set; }
 
+        /// <summary>Offline earnings waiting for the player to collect (null = none).
+        /// Resources are added only when ClaimOfflineReward() is called.</summary>
+        public OfflineReward PendingOfflineReward { get; private set; }
+
         private float _autoSaveTimer;
 
         private void Awake()
@@ -66,13 +71,30 @@ namespace AntEmpire.Core
             Workforce = new WorkforceService(SaveManager);
             Evolution = new EvolutionService(SaveManager, ResourceManager, EvolutionLevelData.CreateDefaultSet());
 
-            // TODO: OfflineProgressService — calculate offline rewards here,
-            //       before gameplay starts, and show OfflineRewardPopup.
+            // Offline progress: computed from the previous session's last
+            // save, shown by the HUD as a "While you were away" popup.
+            PendingOfflineReward = new OfflineProgressService().Calculate(
+                SaveManager.Data, Evolution, Workforce, RoomService, ResourceManager, SaveManager.IsNewGame);
+
             // TODO: SceneLoader — load MainMenu after services are ready.
 
             Debug.Log(SaveManager.IsNewGame
                 ? "[GameManager] New colony founded."
                 : "[GameManager] Colony loaded from save.");
+        }
+
+        /// <summary>Add the pending offline earnings to the colony and clear the popup.</summary>
+        public void ClaimOfflineReward()
+        {
+            if (PendingOfflineReward == null)
+            {
+                return;
+            }
+
+            ResourceManager.Add(ResourceType.Food, PendingOfflineReward.Food);
+            ResourceManager.Add(ResourceType.Leaves, PendingOfflineReward.Leaves);
+            PendingOfflineReward = null;
+            SaveManager.Save();
         }
 
         /// <summary>Push current room levels into the systems they affect.</summary>

@@ -132,6 +132,53 @@ namespace AntEmpire.UI
             }
 
             GUILayout.EndArea();
+
+            DrawOfflinePopup(game); // drawn last so it sits on top
+        }
+
+        private void DrawOfflinePopup(GameManager game)
+        {
+            var reward = game.PendingOfflineReward;
+            if (reward == null)
+            {
+                return;
+            }
+
+            float width = Screen.width * 0.5f;
+            float height = Screen.height * 0.45f;
+            Rect rect = new Rect((Screen.width - width) / 2f, (Screen.height - height) / 2f, width, height);
+
+            GUI.Box(rect, GUIContent.none);
+            GUI.Box(rect, GUIContent.none); // double for a denser backdrop
+            GUILayout.BeginArea(rect);
+            GUILayout.Space(16);
+            GUILayout.Label("While you were away…", _labelStyle);
+            GUILayout.Label($"({FormatDuration(reward.Seconds)})", _labelStyle);
+            GUILayout.Space(10);
+            if (reward.Food >= 1)
+            {
+                GUILayout.Label($"+{reward.Food:0} Food", _labelStyle);
+            }
+            if (reward.Leaves >= 1)
+            {
+                GUILayout.Label($"+{reward.Leaves:0} Leaves", _labelStyle);
+            }
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Collect!", _buttonStyle))
+            {
+                game.ClaimOfflineReward();
+            }
+            GUILayout.Space(16);
+            GUILayout.EndArea();
+        }
+
+        private static string FormatDuration(long seconds)
+        {
+            if (seconds >= 3600)
+            {
+                return $"{seconds / 3600}h {seconds % 3600 / 60}m";
+            }
+            return seconds >= 60 ? $"{seconds / 60}m" : $"{seconds}s";
         }
 
         private void DrawJobRow(WorkforceService workforce, ResourceType type, int population)
