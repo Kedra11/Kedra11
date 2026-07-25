@@ -1,4 +1,5 @@
 using AntEmpire.Economy;
+using AntEmpire.Rooms;
 using AntEmpire.SaveSystem;
 using UnityEngine;
 
@@ -27,6 +28,7 @@ namespace AntEmpire.Core
 
         public SaveManager SaveManager { get; private set; }
         public ResourceManager ResourceManager { get; private set; }
+        public RoomService RoomService { get; private set; }
 
         private float _autoSaveTimer;
 
@@ -51,6 +53,12 @@ namespace AntEmpire.Core
 
             ResourceManager = new ResourceManager(SaveManager.Data);
 
+            // Room configs: runtime defaults for now; swap for authored
+            // ScriptableObject assets once they exist in the project.
+            RoomService = new RoomService(SaveManager, ResourceManager, RoomTypeData.CreateDefaultSet());
+            RoomService.RoomUpgraded += (_, _) => ApplyRoomEffects();
+            ApplyRoomEffects();
+
             // TODO: OfflineProgressService — calculate offline rewards here,
             //       before gameplay starts, and show OfflineRewardPopup.
             // TODO: SceneLoader — load MainMenu after services are ready.
@@ -58,6 +66,12 @@ namespace AntEmpire.Core
             Debug.Log(SaveManager.IsNewGame
                 ? "[GameManager] New colony founded."
                 : "[GameManager] Colony loaded from save.");
+        }
+
+        /// <summary>Push current room levels into the systems they affect.</summary>
+        private void ApplyRoomEffects()
+        {
+            ResourceManager.SetCapacity(ResourceType.Food, RoomService.FoodCapacity);
         }
 
         private void Update()

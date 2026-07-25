@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using AntEmpire.SaveSystem;
 
 namespace AntEmpire.Economy
@@ -20,6 +21,7 @@ namespace AntEmpire.Economy
     {
         private readonly ResourceWallet _wallet = new ResourceWallet();
         private readonly SaveData _saveData;
+        private readonly Dictionary<ResourceType, double> _capacities = new Dictionary<ResourceType, double>();
 
         /// <summary>Fired after any balance change: (type, newAmount). Subscribe from UI.</summary>
         public event Action<ResourceType, double> ResourceChanged;
@@ -57,9 +59,32 @@ namespace AntEmpire.Economy
             return true;
         }
 
+        /// <summary>Storage limit for a resource (default: unlimited). Driven by
+        /// room effects — e.g. Food Storage level sets the Food capacity.</summary>
+        public double GetCapacity(ResourceType type)
+        {
+            return _capacities.TryGetValue(type, out double cap) ? cap : double.PositiveInfinity;
+        }
+
+        public void SetCapacity(ResourceType type, double capacity)
+        {
+            _capacities[type] = capacity;
+            if (_wallet.Get(type) > capacity)
+            {
+                _wallet.Set(type, capacity);
+            }
+        }
+
+        /// <summary>Add resources, clamped to the storage capacity. Overflow is lost —
+        /// that's the player's cue to upgrade Food Storage.</summary>
         public void Add(ResourceType type, double amount)
         {
-            _wallet.Add(type, amount);
+            double space = GetCapacity(type) - _wallet.Get(type);
+            if (space <= 0)
+            {
+                return;
+            }
+            _wallet.Add(type, amount < space ? amount : space);
         }
 
         public ResourceTransactionResult TrySpend(ResourceType type, double amount)

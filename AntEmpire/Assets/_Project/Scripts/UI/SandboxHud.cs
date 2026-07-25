@@ -1,74 +1,131 @@
+using AntEmpire.Ants;
+using AntEmpire.Colony;
 using AntEmpire.Core;
 using AntEmpire.Economy;
+using AntEmpire.Rooms;
 using UnityEngine;
 
 namespace AntEmpire.UI
 {
     /// <summary>
-    /// Dev-only resource readout for the prototype sandbox, drawn with IMGUI
-    /// so it needs zero scene setup. The real game will use a proper HUD
-    /// (MainHUD / ResourcePanel) driven by ResourceManager events — per
-    /// CLAUDE.md, UI listens to economy events and never computes economy.
+    /// Dev-only HUD for the prototype sandbox, drawn with IMGUI so it needs
+    /// zero scene setup: resource readout, population, queen status and
+    /// room upgrade buttons.
     ///
-    /// It still subscribes to ResourceChanged (instead of polling Get() in
-    /// OnGUI) to establish the event-driven pattern early.
+    /// The real game will replace this with a proper HUD (MainHUD /
+    /// ResourcePanel / RoomPanel) — per CLAUDE.md, UI listens to economy
+    /// events and never computes economy. Room costs shown here come from
+    /// RoomService, never calculated in UI.
     /// </summary>
     public class SandboxHud : MonoBehaviour
     {
-        private double _food;
-        private double _leaves;
-        private double _soil;
-        private double _dna;
-
-        private GUIStyle _style;
+        private QueenController _queen;
+        private GUIStyle _labelStyle;
+        private GUIStyle _buttonStyle;
 
         private void Start()
         {
-            var resources = GameManager.Instance.ResourceManager;
-            resources.ResourceChanged += OnResourceChanged;
-
-            _food = resources.Get(ResourceType.Food);
-            _leaves = resources.Get(ResourceType.Leaves);
-            _soil = resources.Get(ResourceType.Soil);
-            _dna = resources.Get(ResourceType.DNA);
-        }
-
-        private void OnDestroy()
-        {
-            if (GameManager.Instance != null)
-            {
-                GameManager.Instance.ResourceManager.ResourceChanged -= OnResourceChanged;
-            }
-        }
-
-        private void OnResourceChanged(ResourceType type, double amount)
-        {
-            switch (type)
-            {
-                case ResourceType.Food: _food = amount; break;
-                case ResourceType.Leaves: _leaves = amount; break;
-                case ResourceType.Soil: _soil = amount; break;
-                case ResourceType.DNA: _dna = amount; break;
-            }
+            _queen = FindAnyObjectByType<QueenController>();
         }
 
         private void OnGUI()
         {
-            if (_style == null)
+            GameManager game = GameManager.Instance;
+            if (game == null)
             {
-                _style = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = Mathf.RoundToInt(Screen.height * 0.03f),
-                    fontStyle = FontStyle.Bold
-                };
-                _style.normal.textColor = Color.white;
+                return;
             }
 
-            // Plain ASCII labels — IMGUI's default font has no emoji glyphs.
-            GUI.Label(new Rect(20, 15, 600, 40), $"Food: {_food:0}", _style);
-            GUI.Label(new Rect(20, 15 + _style.fontSize * 1.5f, 600, 40), $"Leaves: {_leaves:0}", _style);
-            GUI.Label(new Rect(20, 15 + _style.fontSize * 3.0f, 600, 40), $"Soil: {_soil:0}", _style);
-            GUI.Label(new Rect(20, 15 + _style.fontSize * 4.5f, 600, 40), $"DNA: {_dna:0}", _style);
+            EnsureStyles();
+
+            ResourceManager resources = game.ResourceManager;
+            RoomService rooms = game.RoomService;
+            int population = game.SaveManager.Data.GetAntCount(AntIds.Worker);
+
+            GUILayout.BeginArea(new Rect(20, 15, Screen.width * 0.42f, Screen.height - 30));
+
+            // -- Resources ------------------------------------------------------
+            GUILayout.Label(
+                $"Food: {resources.Get(ResourceType.Food):0} / {rooms.FoodCapacity:0}", _labelStyle);
+            GUILayout.Label($"Leaves: {resources.Get(ResourceType.Leaves):0}", _labelStyle);
+            GUILayout.Label($"Soil: {resources.Get(ResourceType.Soil):0}", _labelStyle);
+            GUILayout.Label($"DNA: {resources.Get(ResourceType.DNA):0}", _labelStyle);
+            GUILayout.Space(8);
+            GUILayout.Label($"Workers: {population} / {rooms.PopulationCap}", _labelStyle);
+
+            // -- Queen status ---------------------------------------------------
+            if (_queen != null)
+            {
+                string queenLine = string.IsNullOrEmpty(_queen.PausedReason)
+                    ? $"Queen: next larva {Mathf.RoundToInt(_queen.BirthProgress * 100f)}%"
+                    : $"Queen: {_queen.PausedReason}";
+                GUILayout.Label(queenLine, _labelStyle);
+            }
+
+            GUILayout.Space(10);
+
+            // -- Room upgrade buttons ------------------------------------------
+            foreach (RoomTypeData config in rooms.Configs)
+            {
+                DrawRoomButton(rooms, config);
+            }
+
+            GUILayout.EndArea();
+        }
+
+        private void DrawRoomButton(RoomService rooms, RoomTypeData config)
+        {
+            int level = rooms.GetLevel(config.id);
+
+            if (rooms.IsMaxLevel(config.id))
+            {
+                GUILayout.Label($"{config.displayName}  Lv {level} (MAX)", _labelStyle);
+                return;
+            }
+
+            var (food, leaves, soil) = rooms.GetUpgradeCost(config.id);
+            string action = level == 0 ? "Build" : "Upgrade";
+            string cost = FormatCost(food, leaves, soil);
+
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = rooms.CanUpgrade(config.id);
+            if (GUILayout.Button($"{action} {config.displayName} (Lv {level})  —  {cost}", _buttonStyle))
+            {
+                rooms.TryUpgrade(config.id);
+            }
+            GUI.enabled = previousEnabled;
+        }
+
+        private static string FormatCost(int food, int leaves, int soil)
+        {
+            string result = "";
+            if (food > 0) result += $"{food} Food  ";
+            if (leaves > 0) result += $"{leaves} Leaves  ";
+            if (soil > 0) result += $"{soil} Soil";
+            return result.TrimEnd();
+        }
+
+        private void EnsureStyles()
+        {
+            if (_labelStyle != null)
+            {
+                return;
+            }
+
+            int fontSize = Mathf.RoundToInt(Screen.height * 0.028f);
+            _labelStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = fontSize,
+                fontStyle = FontStyle.Bold
+            };
+            _labelStyle.normal.textColor = Color.white;
+
+            _buttonStyle = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = Mathf.RoundToInt(fontSize * 0.85f),
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(10, 10, 8, 8)
+            };
         }
     }
 }

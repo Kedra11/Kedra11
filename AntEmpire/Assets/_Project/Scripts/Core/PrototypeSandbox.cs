@@ -65,6 +65,17 @@ namespace AntEmpire.Core
                 MakeMaterial(new Color(0.45f, 0.3f, 0.15f)); // earth brown
             Object.Destroy(nest.GetComponent<Collider>());
             nest.AddComponent<NestEntrance>();
+
+            // The queen sits on top of the mound: a dark sphere for now,
+            // her logic (hatching workers) lives in QueenController.
+            GameObject queen = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            queen.name = "Queen";
+            queen.transform.position = new Vector3(0f, 0.35f, 0f);
+            queen.transform.localScale = new Vector3(0.45f, 0.4f, 0.6f);
+            queen.GetComponent<Renderer>().sharedMaterial =
+                MakeMaterial(new Color(0.2f, 0.1f, 0.05f));
+            Object.Destroy(queen.GetComponent<Collider>());
+            queen.AddComponent<QueenController>();
         }
 
         private void BuildResourceNodes()
