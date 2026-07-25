@@ -9,11 +9,9 @@ namespace AntEmpire.Rooms
     /// </summary>
     public class RoomController : MonoBehaviour
     {
-        // TODO: reference RoomTypeData (ScriptableObject) config.
-        // TODO: upgrade via ResourceManager.TrySpend(cost...) — never mutate
-        //       resources directly.
-        // TODO: apply effects: Queen Chamber -> population cap,
-        //       Food Storage -> storage capacity, Larva Nursery -> birth speed.
-        // TODO: visual upgrade per level (swap/extend room prefab).
+        // NOTE: room logic lives in RoomService (levels, costs, effects) and
+        // the current visualization in UndergroundView. This stub remains for
+        // the future authored Underground scene, where each room becomes an
+        // interactive scene object (tap to open the upgrade panel).
     }
 }

@@ -23,6 +23,8 @@ namespace AntEmpire.Ants
         private AntStateMachine _stateMachine;
         private WorkerAntCollector _collector;
         private ResourceNode _target;
+        private float _speedMultiplier = 1f;
+        private int _carryCapacityOverride; // 0 = use typeData.carryCapacity
 
         private const float ArriveDistance = 0.35f;
         private const float TurnSpeedDegrees = 540f;
@@ -38,6 +40,24 @@ namespace AntEmpire.Ants
         public void Initialize(AntTypeData data)
         {
             typeData = data;
+        }
+
+        /// <summary>Apply the colony's evolution level: stats plus the visual stage.
+        /// Called by AntSpawner on spawn and whenever the colony evolves.</summary>
+        public void ApplyEvolution(EvolutionLevelData data)
+        {
+            if (data == null)
+            {
+                return;
+            }
+            _speedMultiplier = data.speedMultiplier;
+            _carryCapacityOverride = data.carryCapacity;
+
+            var visual = GetComponent<PlaceholderAntVisual>();
+            if (visual != null)
+            {
+                visual.ApplyLevel(data.level);
+            }
         }
 
         private void Awake()
@@ -102,7 +122,8 @@ namespace AntEmpire.Ants
 
         public void CollectFromTarget()
         {
-            double taken = _target.TakeUpTo(typeData.carryCapacity);
+            int capacity = _carryCapacityOverride > 0 ? _carryCapacityOverride : typeData.carryCapacity;
+            double taken = _target.TakeUpTo(capacity);
             if (taken > 0)
             {
                 _collector.Take(_target.Type, taken);
@@ -131,7 +152,7 @@ namespace AntEmpire.Ants
             }
 
             transform.position = Vector3.MoveTowards(
-                transform.position, destination, typeData.moveSpeed * deltaTime);
+                transform.position, destination, typeData.moveSpeed * _speedMultiplier * deltaTime);
 
             // Face the walking direction so the placeholder body reads as "running".
             Quaternion look = Quaternion.LookRotation(toTarget.normalized, Vector3.up);

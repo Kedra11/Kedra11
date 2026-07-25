@@ -1,3 +1,4 @@
+using AntEmpire.Ants;
 using AntEmpire.Colony;
 using AntEmpire.Economy;
 using AntEmpire.Rooms;
@@ -31,6 +32,7 @@ namespace AntEmpire.Core
         public ResourceManager ResourceManager { get; private set; }
         public RoomService RoomService { get; private set; }
         public WorkforceService Workforce { get; private set; }
+        public EvolutionService Evolution { get; private set; }
 
         private float _autoSaveTimer;
 
@@ -62,6 +64,7 @@ namespace AntEmpire.Core
             ApplyRoomEffects();
 
             Workforce = new WorkforceService(SaveManager);
+            Evolution = new EvolutionService(SaveManager, ResourceManager, EvolutionLevelData.CreateDefaultSet());
 
             // TODO: OfflineProgressService — calculate offline rewards here,
             //       before gameplay starts, and show OfflineRewardPopup.

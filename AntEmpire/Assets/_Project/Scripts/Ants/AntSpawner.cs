@@ -27,6 +27,9 @@ namespace AntEmpire.Ants
 
         public int AliveWorkers { get; private set; }
 
+        /// <summary>Live ants — used by combat (spider bites) and reassignment.</summary>
+        public IReadOnlyList<AntController> Ants => _ants;
+
         private void Start()
         {
             if (workerType == null)
@@ -58,6 +61,9 @@ namespace AntEmpire.Ants
 
             GameManager.Instance.Workforce.JobsChanged += ReassignJobs;
             ReassignJobs();
+
+            GameManager.Instance.Evolution.EvolutionChanged += OnEvolutionChanged;
+            OnEvolutionChanged(GameManager.Instance.Evolution.GetLevel());
         }
 
         private void OnDestroy()
@@ -65,6 +71,16 @@ namespace AntEmpire.Ants
             if (GameManager.Instance != null)
             {
                 GameManager.Instance.Workforce.JobsChanged -= ReassignJobs;
+                GameManager.Instance.Evolution.EvolutionChanged -= OnEvolutionChanged;
+            }
+        }
+
+        private void OnEvolutionChanged(int _)
+        {
+            EvolutionLevelData current = GameManager.Instance.Evolution.Current;
+            foreach (AntController ant in _ants)
+            {
+                ant.ApplyEvolution(current);
             }
         }
 
@@ -132,6 +148,10 @@ namespace AntEmpire.Ants
                 controller = antObject.AddComponent<AntController>();
             }
             controller.Initialize(workerType);
+            if (GameManager.Instance != null)
+            {
+                controller.ApplyEvolution(GameManager.Instance.Evolution.Current);
+            }
 
             _ants.Add(controller);
             AliveWorkers++;

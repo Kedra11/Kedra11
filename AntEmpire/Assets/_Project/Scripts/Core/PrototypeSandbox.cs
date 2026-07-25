@@ -39,6 +39,7 @@ namespace AntEmpire.Core
             BuildResourceNodes();
             BuildSpawner();
             BuildUnderground();
+            BuildEvents();
             SetupCameraAndLight();
             gameObject.AddComponent<SandboxHud>();
         }
@@ -48,6 +49,11 @@ namespace AntEmpire.Core
             var underground = new GameObject("UndergroundView");
             underground.transform.position = UndergroundCenter;
             underground.AddComponent<UndergroundView>();
+        }
+
+        private static void BuildEvents()
+        {
+            new GameObject("Events").AddComponent<AntEmpire.Events.SpiderAttackEvent>();
         }
 
         private static void EnsureGameManager()

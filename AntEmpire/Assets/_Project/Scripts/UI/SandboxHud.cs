@@ -2,6 +2,7 @@ using AntEmpire.Ants;
 using AntEmpire.Colony;
 using AntEmpire.Core;
 using AntEmpire.Economy;
+using AntEmpire.Events;
 using AntEmpire.Rooms;
 using UnityEngine;
 
@@ -21,13 +22,16 @@ namespace AntEmpire.UI
     {
         private QueenController _queen;
         private CameraViewSwitcher _viewSwitcher;
+        private SpiderAttackEvent _spiderEvent;
         private GUIStyle _labelStyle;
+        private GUIStyle _alertStyle;
         private GUIStyle _buttonStyle;
 
         private void Start()
         {
             _queen = FindAnyObjectByType<QueenController>();
             _viewSwitcher = FindAnyObjectByType<CameraViewSwitcher>();
+            _spiderEvent = FindAnyObjectByType<SpiderAttackEvent>();
         }
 
         private void OnGUI()
@@ -45,6 +49,24 @@ namespace AntEmpire.UI
             int population = game.SaveManager.Data.GetAntCount(AntIds.Worker);
 
             GUILayout.BeginArea(new Rect(20, 15, Screen.width * 0.48f, Screen.height - 30));
+
+            // -- Event banner ---------------------------------------------------
+            if (_spiderEvent != null)
+            {
+                if (_spiderEvent.ActiveSpider != null)
+                {
+                    GUILayout.Label(
+                        $"SPIDER ATTACK!  HP {_spiderEvent.ActiveSpider.Health:0}/{_spiderEvent.ActiveSpider.MaxHealth:0}" +
+                        "  — workers near it bite it!",
+                        _alertStyle);
+                    GUILayout.Space(6);
+                }
+                else if (Time.time < _spiderEvent.ResultVisibleUntil)
+                {
+                    GUILayout.Label(_spiderEvent.ResultMessage, _alertStyle);
+                    GUILayout.Space(6);
+                }
+            }
 
             // -- View toggle ----------------------------------------------------
             if (_viewSwitcher != null)
@@ -83,6 +105,22 @@ namespace AntEmpire.UI
                     ? $"Queen: next larva {Mathf.RoundToInt(_queen.BirthProgress * 100f)}%"
                     : $"Queen: {_queen.PausedReason}";
                 GUILayout.Label(queenLine, _labelStyle);
+            }
+
+            // -- Evolution ------------------------------------------------------
+            EvolutionService evolution = game.Evolution;
+            GUILayout.Space(6);
+            GUILayout.Label($"Worker Evolution: Lv {evolution.GetLevel()} / {evolution.MaxLevel}", _labelStyle);
+            EvolutionLevelData next = evolution.Next;
+            if (next != null)
+            {
+                bool wasEnabled = GUI.enabled;
+                GUI.enabled = evolution.CanEvolve();
+                if (GUILayout.Button($"Evolve → Lv {next.level}:  {FormatCost(next.foodCost, 0, 0)} {next.dnaCost} DNA", _buttonStyle))
+                {
+                    evolution.TryEvolve();
+                }
+                GUI.enabled = wasEnabled;
             }
 
             GUILayout.Space(10);
@@ -164,6 +202,9 @@ namespace AntEmpire.UI
                 fontStyle = FontStyle.Bold
             };
             _labelStyle.normal.textColor = Color.white;
+
+            _alertStyle = new GUIStyle(_labelStyle) { wordWrap = true };
+            _alertStyle.normal.textColor = new Color(1f, 0.45f, 0.2f);
 
             _buttonStyle = new GUIStyle(GUI.skin.button)
             {
