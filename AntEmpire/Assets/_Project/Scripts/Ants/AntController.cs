@@ -1,5 +1,6 @@
 using AntEmpire.Colony;
 using AntEmpire.Core;
+using AntEmpire.Economy;
 using AntEmpire.ResourceNodes;
 using UnityEngine;
 
@@ -28,6 +29,10 @@ namespace AntEmpire.Ants
 
         public AntState CurrentState => _stateMachine?.CurrentState ?? AntState.Idle;
         public AntTypeData TypeData => typeData;
+
+        /// <summary>Resource this worker is dedicated to by the player, or null
+        /// for auto (nearest of any type). Set by AntSpawner from WorkforceService.</summary>
+        public ResourceType? AssignedResource { get; set; }
 
         /// <summary>Inject config when spawning from code (sandbox / spawner).</summary>
         public void Initialize(AntTypeData data)
@@ -66,7 +71,17 @@ namespace AntEmpire.Ants
 
         public bool TryAcquireResourceTarget()
         {
-            _target = ResourceNode.FindNearest(transform.position);
+            // Dedicated workers look for their assigned resource first, and
+            // only fall back to "anything nearby" when that type has run dry —
+            // an idle ant would read as a bug, not as information.
+            _target = AssignedResource.HasValue
+                ? ResourceNode.FindNearest(transform.position, AssignedResource.Value)
+                : null;
+
+            if (_target == null)
+            {
+                _target = ResourceNode.FindNearest(transform.position);
+            }
             return _target != null;
         }
 

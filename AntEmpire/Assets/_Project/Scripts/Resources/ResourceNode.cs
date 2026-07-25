@@ -53,8 +53,10 @@ namespace AntEmpire.ResourceNodes
             Active.Remove(this);
         }
 
-        /// <summary>Nearest node with resources left, or null. Plain list scan — cheap for MVP node counts.</summary>
-        public static ResourceNode FindNearest(Vector3 position)
+        /// <summary>Nearest node with resources left, or null. Pass a
+        /// <paramref name="filter"/> to only consider one resource type
+        /// (used by assigned workers). Plain list scan — cheap for MVP node counts.</summary>
+        public static ResourceNode FindNearest(Vector3 position, ResourceType? filter = null)
         {
             ResourceNode nearest = null;
             float nearestSqr = float.MaxValue;
@@ -63,6 +65,10 @@ namespace AntEmpire.ResourceNodes
             {
                 ResourceNode node = Active[i];
                 if (node.IsDepleted)
+                {
+                    continue;
+                }
+                if (filter.HasValue && node.type != filter.Value)
                 {
                     continue;
                 }

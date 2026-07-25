@@ -53,6 +53,14 @@ namespace AntEmpire.UI
             GUILayout.Space(8);
             GUILayout.Label($"Workers: {population} / {rooms.PopulationCap}", _labelStyle);
 
+            // -- Job assignment -------------------------------------------------
+            WorkforceService workforce = game.Workforce;
+            foreach (ResourceType type in WorkforceService.AssignableResources)
+            {
+                DrawJobRow(workforce, type, population);
+            }
+            GUILayout.Label($"Auto (nearest): {workforce.FreeWorkers(population)}", _labelStyle);
+
             // -- Queen status ---------------------------------------------------
             if (_queen != null)
             {
@@ -71,6 +79,24 @@ namespace AntEmpire.UI
             }
 
             GUILayout.EndArea();
+        }
+
+        private void DrawJobRow(WorkforceService workforce, ResourceType type, int population)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label($"  On {type}: {workforce.GetTarget(type)}", _labelStyle, GUILayout.ExpandWidth(false));
+            GUILayout.Space(10);
+
+            float buttonSize = _labelStyle.fontSize * 1.6f;
+            if (GUILayout.Button("-", _buttonStyle, GUILayout.Width(buttonSize), GUILayout.Height(buttonSize)))
+            {
+                workforce.TryAdjust(type, -1, population);
+            }
+            if (GUILayout.Button("+", _buttonStyle, GUILayout.Width(buttonSize), GUILayout.Height(buttonSize)))
+            {
+                workforce.TryAdjust(type, +1, population);
+            }
+            GUILayout.EndHorizontal();
         }
 
         private void DrawRoomButton(RoomService rooms, RoomTypeData config)

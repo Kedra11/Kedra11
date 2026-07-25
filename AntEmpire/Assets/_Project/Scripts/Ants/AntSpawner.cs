@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using AntEmpire.Colony;
 using AntEmpire.Core;
+using AntEmpire.Economy;
 using UnityEngine;
 
 namespace AntEmpire.Ants
@@ -20,6 +22,8 @@ namespace AntEmpire.Ants
         [SerializeField] private GameObject workerPrefab;
         [SerializeField] private int newGameWorkerCount = 3;
         [SerializeField] private float spawnRadius = 1.5f;
+
+        private readonly List<AntController> _ants = new List<AntController>();
 
         public int AliveWorkers { get; private set; }
 
@@ -51,6 +55,40 @@ namespace AntEmpire.Ants
             {
                 SpawnWorkerInstance();
             }
+
+            GameManager.Instance.Workforce.JobsChanged += ReassignJobs;
+            ReassignJobs();
+        }
+
+        private void OnDestroy()
+        {
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.Workforce.JobsChanged -= ReassignJobs;
+            }
+        }
+
+        /// <summary>Distribute player-set job targets over the live ants:
+        /// the first N go to the first assigned resource, and so on; the
+        /// remainder gathers on auto (nearest node of any type).</summary>
+        private void ReassignJobs()
+        {
+            WorkforceService workforce = GameManager.Instance.Workforce;
+            int antIndex = 0;
+
+            foreach (ResourceType type in WorkforceService.AssignableResources)
+            {
+                int target = workforce.GetTarget(type);
+                for (int n = 0; n < target && antIndex < _ants.Count; n++, antIndex++)
+                {
+                    _ants[antIndex].AssignedResource = type;
+                }
+            }
+
+            for (; antIndex < _ants.Count; antIndex++)
+            {
+                _ants[antIndex].AssignedResource = null;
+            }
         }
 
         /// <summary>Add a brand-new worker to the colony (updates the save).</summary>
@@ -62,6 +100,7 @@ namespace AntEmpire.Ants
             save.Data.SetAntCount(AntIds.Worker, save.Data.GetAntCount(AntIds.Worker) + 1);
             save.Save();
 
+            ReassignJobs();
             return ant;
         }
 
@@ -94,6 +133,7 @@ namespace AntEmpire.Ants
             }
             controller.Initialize(workerType);
 
+            _ants.Add(controller);
             AliveWorkers++;
             return controller;
         }

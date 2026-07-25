@@ -27,6 +27,10 @@ namespace AntEmpire.SaveSystem
         public List<IntEntry> antEvolutionLevels = new List<IntEntry>();
         public List<IntEntry> roomLevels = new List<IntEntry>();
 
+        /// <summary>How many workers the player assigned to each resource
+        /// (key = resource id). Workers not covered here gather on auto.</summary>
+        public List<IntEntry> workerJobs = new List<IntEntry>();
+
         public int queenLevel = 1;
         public int currentDay;
         public bool tutorialCompleted;
@@ -95,5 +99,8 @@ namespace AntEmpire.SaveSystem
 
         public int GetRoomLevel(string roomId) => GetInt(roomLevels, roomId);
         public void SetRoomLevel(string roomId, int level) => SetInt(roomLevels, roomId, level);
+
+        public int GetWorkerJobTarget(string resourceId) => GetInt(workerJobs, resourceId);
+        public void SetWorkerJobTarget(string resourceId, int count) => SetInt(workerJobs, resourceId, count);
     }
 }
