@@ -42,7 +42,7 @@ namespace AntEmpire.UI
             RoomService rooms = game.RoomService;
             int population = game.SaveManager.Data.GetAntCount(AntIds.Worker);
 
-            GUILayout.BeginArea(new Rect(20, 15, Screen.width * 0.42f, Screen.height - 30));
+            GUILayout.BeginArea(new Rect(20, 15, Screen.width * 0.48f, Screen.height - 30));
 
             // -- Resources ------------------------------------------------------
             GUILayout.Label(
@@ -111,15 +111,19 @@ namespace AntEmpire.UI
 
             var (food, leaves, soil) = rooms.GetUpgradeCost(config.id);
             string action = level == 0 ? "Build" : "Upgrade";
-            string cost = FormatCost(food, leaves, soil);
+
+            // Room name on its own line, the button carries only action + cost,
+            // so the price is always fully visible.
+            GUILayout.Label($"{config.displayName}  Lv {level}", _labelStyle);
 
             bool previousEnabled = GUI.enabled;
             GUI.enabled = rooms.CanUpgrade(config.id);
-            if (GUILayout.Button($"{action} {config.displayName} (Lv {level})  —  {cost}", _buttonStyle))
+            if (GUILayout.Button($"{action} → Lv {level + 1}:  {FormatCost(food, leaves, soil)}", _buttonStyle))
             {
                 rooms.TryUpgrade(config.id);
             }
             GUI.enabled = previousEnabled;
+            GUILayout.Space(6);
         }
 
         private static string FormatCost(int food, int leaves, int soil)
@@ -150,7 +154,8 @@ namespace AntEmpire.UI
             {
                 fontSize = Mathf.RoundToInt(fontSize * 0.85f),
                 alignment = TextAnchor.MiddleLeft,
-                padding = new RectOffset(10, 10, 8, 8)
+                padding = new RectOffset(10, 10, 8, 8),
+                wordWrap = true // never clip the upgrade cost
             };
         }
     }
