@@ -27,6 +27,10 @@ namespace AntEmpire.Core
         [SerializeField] private float minNodeDistance = 4f;
         [SerializeField] private float maxNodeDistance = 9f;
 
+        // The underground cutaway lives far from the meadow; the camera
+        // teleports between the two views.
+        private static readonly Vector3 UndergroundCenter = new Vector3(80f, 0f, 0f);
+
         private void Awake()
         {
             EnsureGameManager();
@@ -34,8 +38,16 @@ namespace AntEmpire.Core
             BuildNest();
             BuildResourceNodes();
             BuildSpawner();
+            BuildUnderground();
             SetupCameraAndLight();
             gameObject.AddComponent<SandboxHud>();
+        }
+
+        private static void BuildUnderground()
+        {
+            var underground = new GameObject("UndergroundView");
+            underground.transform.position = UndergroundCenter;
+            underground.AddComponent<UndergroundView>();
         }
 
         private static void EnsureGameManager()
@@ -132,6 +144,13 @@ namespace AntEmpire.Core
             camera.transform.LookAt(Vector3.zero);
             camera.backgroundColor = new Color(0.55f, 0.75f, 0.9f);
             camera.clearFlags = CameraClearFlags.SolidColor;
+
+            var switcher = camera.gameObject.AddComponent<CameraViewSwitcher>();
+            switcher.Configure(
+                surfacePose: new Pose(camera.transform.position, camera.transform.rotation),
+                undergroundPose: new Pose(
+                    UndergroundCenter + new Vector3(0f, 3.6f, -10.5f),
+                    Quaternion.LookRotation(Vector3.forward, Vector3.up)));
 
             if (Object.FindAnyObjectByType<Light>() == null)
             {

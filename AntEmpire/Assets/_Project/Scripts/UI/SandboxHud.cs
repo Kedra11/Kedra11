@@ -20,12 +20,14 @@ namespace AntEmpire.UI
     public class SandboxHud : MonoBehaviour
     {
         private QueenController _queen;
+        private CameraViewSwitcher _viewSwitcher;
         private GUIStyle _labelStyle;
         private GUIStyle _buttonStyle;
 
         private void Start()
         {
             _queen = FindAnyObjectByType<QueenController>();
+            _viewSwitcher = FindAnyObjectByType<CameraViewSwitcher>();
         }
 
         private void OnGUI()
@@ -43,6 +45,19 @@ namespace AntEmpire.UI
             int population = game.SaveManager.Data.GetAntCount(AntIds.Worker);
 
             GUILayout.BeginArea(new Rect(20, 15, Screen.width * 0.48f, Screen.height - 30));
+
+            // -- View toggle ----------------------------------------------------
+            if (_viewSwitcher != null)
+            {
+                string viewLabel = _viewSwitcher.IsUnderground
+                    ? "Go to Surface"
+                    : "Go Underground (ant farm)";
+                if (GUILayout.Button(viewLabel, _buttonStyle))
+                {
+                    _viewSwitcher.Toggle();
+                }
+                GUILayout.Space(8);
+            }
 
             // -- Resources ------------------------------------------------------
             GUILayout.Label(
