@@ -30,11 +30,21 @@ namespace AntEmpire.Combat
         private const float DespawnDistance = 22f;
         private const double StealAmount = 25;
 
+        // Defence: up to half the colony rushes the spider; the spider
+        // strikes back, killing a nearby worker every few seconds (workers
+        // are weak fighters — real Soldier ants come later).
+        private const float AggroRadius = 10f;
+        private const float RecruitInterval = 0.5f;
+        private const float StrikeInterval = 2.5f;
+        private const float StrikeRadius = 2.0f;
+
         private ResourceManager _resources;
         private AntSpawner _spawner;
         private Vector3 _nestPosition;
         private Vector3 _fleeDirection;
         private float _stealTimer;
+        private float _recruitTimer;
+        private float _strikeTimer = StrikeInterval;
 
         public Phase CurrentPhase { get; private set; } = Phase.Approach;
         public float MaxHealth { get; private set; }
@@ -65,15 +75,20 @@ namespace AntEmpire.Combat
                     {
                         CurrentPhase = Phase.Steal;
                     }
+                    RecruitDefenders();
                     TakeBites();
+                    StrikeBack();
                     break;
 
                 case Phase.Steal:
                     _stealTimer -= Time.deltaTime;
+                    RecruitDefenders();
                     TakeBites();
+                    StrikeBack();
                     if (CurrentPhase == Phase.Steal && _stealTimer <= 0f)
                     {
                         GrabFood();
+                        ReleaseDefenders();
                         CurrentPhase = Phase.Flee;
                     }
                     break;
@@ -86,6 +101,83 @@ namespace AntEmpire.Combat
                         Finish(defeated: false);
                     }
                     break;
+            }
+        }
+
+        /// <summary>Send nearby workers into the fight, capped at half the
+        /// colony so gathering never fully stops.</summary>
+        private void RecruitDefenders()
+        {
+            _recruitTimer -= Time.deltaTime;
+            if (_recruitTimer > 0f || _spawner == null)
+            {
+                return;
+            }
+            _recruitTimer = RecruitInterval;
+
+            int maxDefenders = Mathf.CeilToInt(_spawner.Ants.Count * 0.5f);
+            int defending = 0;
+            for (int i = 0; i < _spawner.Ants.Count; i++)
+            {
+                if (_spawner.Ants[i].CombatTarget == this)
+                {
+                    defending++;
+                }
+            }
+
+            float aggroSqr = AggroRadius * AggroRadius;
+            for (int i = 0; i < _spawner.Ants.Count && defending < maxDefenders; i++)
+            {
+                AntController ant = _spawner.Ants[i];
+                if (ant.CombatTarget == null &&
+                    (ant.transform.position - transform.position).sqrMagnitude <= aggroSqr)
+                {
+                    ant.EnterCombat(this);
+                    defending++;
+                }
+            }
+        }
+
+        /// <summary>The spider fights back: kills one worker in melee range
+        /// every few seconds. It never takes the colony's last worker.</summary>
+        private void StrikeBack()
+        {
+            if (CurrentPhase == Phase.Done)
+            {
+                return;
+            }
+
+            _strikeTimer -= Time.deltaTime;
+            if (_strikeTimer > 0f || _spawner == null || _spawner.Ants.Count <= 1)
+            {
+                return;
+            }
+            _strikeTimer = StrikeInterval;
+
+            float strikeSqr = StrikeRadius * StrikeRadius;
+            for (int i = 0; i < _spawner.Ants.Count; i++)
+            {
+                AntController ant = _spawner.Ants[i];
+                if ((ant.transform.position - transform.position).sqrMagnitude <= strikeSqr)
+                {
+                    _spawner.KillWorker(ant);
+                    return;
+                }
+            }
+        }
+
+        private void ReleaseDefenders()
+        {
+            if (_spawner == null)
+            {
+                return;
+            }
+            for (int i = 0; i < _spawner.Ants.Count; i++)
+            {
+                if (_spawner.Ants[i].CombatTarget == this)
+                {
+                    _spawner.Ants[i].ExitCombat();
+                }
             }
         }
 
@@ -164,6 +256,7 @@ namespace AntEmpire.Combat
                 return;
             }
             CurrentPhase = Phase.Done;
+            ReleaseDefenders();
             Finished?.Invoke(this, defeated);
 
             if (defeated)

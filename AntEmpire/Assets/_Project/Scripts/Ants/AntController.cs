@@ -36,6 +36,24 @@ namespace AntEmpire.Ants
         /// for auto (nearest of any type). Set by AntSpawner from WorkforceService.</summary>
         public ResourceType? AssignedResource { get; set; }
 
+        /// <summary>The enemy this ant is currently swarming, or null when working.
+        /// While defending, the gathering state machine is paused.</summary>
+        public Component CombatTarget { get; private set; }
+
+        private const float MeleeStopDistance = 1.15f;
+
+        /// <summary>Called by the enemy when it recruits this ant into the fight.</summary>
+        public void EnterCombat(Component enemy)
+        {
+            CombatTarget = enemy;
+        }
+
+        /// <summary>Called when the enemy dies or flees; the ant resumes working.</summary>
+        public void ExitCombat()
+        {
+            CombatTarget = null;
+        }
+
         /// <summary>Inject config when spawning from code (sandbox / spawner).</summary>
         public void Initialize(AntTypeData data)
         {
@@ -77,6 +95,14 @@ namespace AntEmpire.Ants
 
         private void Update()
         {
+            if (CombatTarget != null)
+            {
+                // Rush the enemy and crowd it in melee range; the enemy itself
+                // counts nearby ants to take bite damage.
+                StepTowards(CombatTarget.transform.position, Time.deltaTime, MeleeStopDistance);
+                return;
+            }
+
             _stateMachine.Tick(Time.deltaTime);
         }
 

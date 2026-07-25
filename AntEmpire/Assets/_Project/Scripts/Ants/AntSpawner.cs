@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using AntEmpire.Colony;
 using AntEmpire.Core;
 using AntEmpire.Economy;
+using AntEmpire.UI;
 using UnityEngine;
 
 namespace AntEmpire.Ants
@@ -118,6 +119,29 @@ namespace AntEmpire.Ants
 
             ReassignJobs();
             return ant;
+        }
+
+        /// <summary>Kill a worker (enemy attack): remove it from the colony,
+        /// update the save and show a small death marker.</summary>
+        public void KillWorker(AntController ant)
+        {
+            if (ant == null || !_ants.Remove(ant))
+            {
+                return;
+            }
+
+            AliveWorkers--;
+            var save = GameManager.Instance.SaveManager;
+            int count = save.Data.GetAntCount(AntIds.Worker) - 1;
+            save.Data.SetAntCount(AntIds.Worker, count < 0 ? 0 : count);
+            save.Save();
+
+            FloatingWorldText.Spawn(
+                ant.transform.position + Vector3.up * 0.6f,
+                "-1 ant", new Color(0.9f, 0.25f, 0.2f));
+            Destroy(ant.gameObject);
+
+            ReassignJobs();
         }
 
         /// <summary>Instantiate one ant near the nest without touching the save.</summary>
