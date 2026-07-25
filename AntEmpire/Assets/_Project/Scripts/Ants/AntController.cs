@@ -177,8 +177,11 @@ namespace AntEmpire.Ants
                 return true;
             }
 
+            float environmentFactor = Events.RainEvent.SpeedFactor *
+                (GameManager.Instance != null ? GameManager.Instance.RoomService.SpeedBonus : 1f);
             transform.position = Vector3.MoveTowards(
-                transform.position, destination, typeData.moveSpeed * _speedMultiplier * deltaTime);
+                transform.position, destination,
+                typeData.moveSpeed * _speedMultiplier * environmentFactor * deltaTime);
 
             // Face the walking direction so the placeholder body reads as "running".
             Quaternion look = Quaternion.LookRotation(toTarget.normalized, Vector3.up);

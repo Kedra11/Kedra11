@@ -23,6 +23,7 @@ namespace AntEmpire.UI
         private QueenController _queen;
         private CameraViewSwitcher _viewSwitcher;
         private SpiderAttackEvent _spiderEvent;
+        private AntSpawner _spawner;
         private GUIStyle _labelStyle;
         private GUIStyle _alertStyle;
         private GUIStyle _buttonStyle;
@@ -32,6 +33,7 @@ namespace AntEmpire.UI
             _queen = FindAnyObjectByType<QueenController>();
             _viewSwitcher = FindAnyObjectByType<CameraViewSwitcher>();
             _spiderEvent = FindAnyObjectByType<SpiderAttackEvent>();
+            _spawner = FindAnyObjectByType<AntSpawner>();
         }
 
         private void OnGUI()
@@ -51,6 +53,11 @@ namespace AntEmpire.UI
             GUILayout.BeginArea(new Rect(20, 15, Screen.width * 0.48f, Screen.height - 30));
 
             // -- Event banner ---------------------------------------------------
+            if (RainEvent.IsRaining)
+            {
+                GUILayout.Label("Rain — everyone moves slower…", _alertStyle);
+                GUILayout.Space(6);
+            }
             if (_spiderEvent != null)
             {
                 if (_spiderEvent.ActiveSpider != null)
@@ -88,15 +95,36 @@ namespace AntEmpire.UI
             GUILayout.Label($"Soil: {resources.Get(ResourceType.Soil):0}", _labelStyle);
             GUILayout.Label($"DNA: {resources.Get(ResourceType.DNA):0}", _labelStyle);
             GUILayout.Space(8);
-            GUILayout.Label($"Workers: {population} / {rooms.PopulationCap}", _labelStyle);
+            int totalPopulation = _spawner != null ? _spawner.TotalPopulation : population;
+            int populationCap = rooms.PopulationCap + game.Queen.BonusPopulationCap;
+            int soldiers = game.SaveManager.Data.GetAntCount(AntIds.Soldier);
+            int scouts = game.SaveManager.Data.GetAntCount(AntIds.Scout);
+            GUILayout.Label(
+                $"Population: {totalPopulation} / {populationCap}  (workers {population}, soldiers {soldiers}, scouts {scouts})",
+                _labelStyle);
 
-            // -- Job assignment -------------------------------------------------
+            // -- Job assignment (workers only) ----------------------------------
             WorkforceService workforce = game.Workforce;
             foreach (ResourceType type in WorkforceService.AssignableResources)
             {
                 DrawJobRow(workforce, type, population);
             }
             GUILayout.Label($"Auto (nearest): {workforce.FreeWorkers(population)}", _labelStyle);
+
+            // -- Hatch specialists ----------------------------------------------
+            if (_spawner != null)
+            {
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("Hatch Soldier — 10 Food", _buttonStyle))
+                {
+                    _spawner.TryHatchSoldier();
+                }
+                if (GUILayout.Button("Hatch Scout — 15 Food", _buttonStyle))
+                {
+                    _spawner.TryHatchScout();
+                }
+                GUILayout.EndHorizontal();
+            }
 
             // -- Queen status ---------------------------------------------------
             if (_queen != null)
@@ -105,6 +133,22 @@ namespace AntEmpire.UI
                     ? $"Queen: next larva {Mathf.RoundToInt(_queen.BirthProgress * 100f)}%"
                     : $"Queen: {_queen.PausedReason}";
                 GUILayout.Label(queenLine, _labelStyle);
+            }
+
+            // -- Queen evolution ------------------------------------------------
+            QueenService queenService = game.Queen;
+            GUILayout.Space(6);
+            GUILayout.Label($"Queen: Lv {queenService.Level} / {QueenService.MaxLevel}", _labelStyle);
+            if (queenService.Level < QueenService.MaxLevel)
+            {
+                var (queenFood, queenDna) = queenService.UpgradeCost;
+                bool guiWasEnabled = GUI.enabled;
+                GUI.enabled = queenService.CanUpgrade();
+                if (GUILayout.Button($"Upgrade Queen → Lv {queenService.Level + 1}:  {queenFood} Food  {queenDna} DNA", _buttonStyle))
+                {
+                    queenService.TryUpgrade();
+                }
+                GUI.enabled = guiWasEnabled;
             }
 
             // -- Evolution ------------------------------------------------------

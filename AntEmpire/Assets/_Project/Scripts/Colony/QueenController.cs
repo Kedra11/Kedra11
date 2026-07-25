@@ -43,6 +43,7 @@ namespace AntEmpire.Colony
             }
 
             RoomService rooms = game.RoomService;
+            UpdateVisual(game.Queen.Level);
 
             float interval = rooms.BirthIntervalSeconds;
             if (interval <= 0f)
@@ -50,9 +51,11 @@ namespace AntEmpire.Colony
                 Pause("Build the Larva Nursery to hatch new workers");
                 return;
             }
+            interval /= game.Queen.BirthSpeedFactor;
 
-            int population = game.SaveManager.Data.GetAntCount(AntIds.Worker);
-            if (population >= rooms.PopulationCap)
+            int population = _spawner.TotalPopulation;
+            int cap = rooms.PopulationCap + game.Queen.BonusPopulationCap;
+            if (population >= cap)
             {
                 Pause("Population is full — upgrade the Queen Chamber");
                 return;
@@ -84,6 +87,18 @@ namespace AntEmpire.Colony
             PausedReason = reason;
             BirthProgress = 0f;
             _timer = 0f;
+        }
+
+        /// <summary>The queen visibly grows with her level; golden at max.</summary>
+        private void UpdateVisual(int level)
+        {
+            float scale = 1f + 0.12f * (level - 1);
+            transform.localScale = new Vector3(0.45f, 0.4f, 0.6f) * scale;
+
+            if (level >= QueenService.MaxLevel && TryGetComponent(out Renderer body))
+            {
+                body.sharedMaterial.color = new Color(0.8f, 0.6f, 0.15f);
+            }
         }
     }
 }

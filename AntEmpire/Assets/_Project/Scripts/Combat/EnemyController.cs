@@ -20,6 +20,10 @@ namespace AntEmpire.Combat
     /// </summary>
     public class EnemyController : MonoBehaviour
     {
+        /// <summary>The currently active enemy, if any — soldiers use this to
+        /// find their target without scene searches.</summary>
+        public static EnemyController Active { get; private set; }
+
         public enum Phase { Approach, Steal, Flee, Done }
 
         private const float MoveSpeed = 1.4f;
@@ -62,6 +66,15 @@ namespace AntEmpire.Combat
             MaxHealth = Health = health;
             _fleeDirection = (transform.position - nestPosition).normalized;
             _stealTimer = StealDuration;
+            Active = this;
+        }
+
+        private void OnDestroy()
+        {
+            if (Active == this)
+            {
+                Active = null;
+            }
         }
 
         private void Update()
@@ -144,24 +157,38 @@ namespace AntEmpire.Combat
         /// It never takes the colony's last worker.</summary>
         private void StrikeBack()
         {
-            if (CurrentPhase == Phase.Done || _spawner == null || _spawner.Ants.Count <= 1)
+            if (CurrentPhase == Phase.Done || _spawner == null)
             {
                 return;
             }
 
-            AntController victim = null;
+            // Soldiers shield the workers: they get struck first.
             float strikeSqr = StrikeRadius * StrikeRadius;
-            for (int i = 0; i < _spawner.Ants.Count; i++)
+            SoldierController soldierVictim = null;
+            for (int i = 0; i < _spawner.Soldiers.Count; i++)
             {
-                AntController ant = _spawner.Ants[i];
-                if ((ant.transform.position - transform.position).sqrMagnitude <= strikeSqr)
+                if ((_spawner.Soldiers[i].transform.position - transform.position).sqrMagnitude <= strikeSqr)
                 {
-                    victim = ant;
+                    soldierVictim = _spawner.Soldiers[i];
                     break;
                 }
             }
 
-            if (victim == null)
+            AntController workerVictim = null;
+            if (soldierVictim == null && _spawner.Ants.Count > 1) // never take the last worker
+            {
+                for (int i = 0; i < _spawner.Ants.Count; i++)
+                {
+                    AntController ant = _spawner.Ants[i];
+                    if ((ant.transform.position - transform.position).sqrMagnitude <= strikeSqr)
+                    {
+                        workerVictim = ant;
+                        break;
+                    }
+                }
+            }
+
+            if (soldierVictim == null && workerVictim == null)
             {
                 return; // nobody in reach — hold the strike
             }
@@ -172,7 +199,15 @@ namespace AntEmpire.Combat
                 return;
             }
             _strikeTimer = StrikeInterval;
-            _spawner.KillWorker(victim);
+
+            if (soldierVictim != null)
+            {
+                _spawner.KillSoldier(soldierVictim);
+            }
+            else
+            {
+                _spawner.KillWorker(workerVictim);
+            }
         }
 
         private void ReleaseDefenders()
@@ -197,22 +232,30 @@ namespace AntEmpire.Combat
                 return;
             }
 
-            int biters = 0;
             float radiusSqr = BiteRadius * BiteRadius;
+            float damagePerSecond = 0f;
+
             for (int i = 0; i < _spawner.Ants.Count; i++)
             {
                 if ((_spawner.Ants[i].transform.position - transform.position).sqrMagnitude <= radiusSqr)
                 {
-                    biters++;
+                    damagePerSecond += DamagePerWorkerPerSecond;
+                }
+            }
+            for (int i = 0; i < _spawner.Soldiers.Count; i++)
+            {
+                if ((_spawner.Soldiers[i].transform.position - transform.position).sqrMagnitude <= radiusSqr)
+                {
+                    damagePerSecond += SoldierController.DamagePerSecond;
                 }
             }
 
-            if (biters == 0)
+            if (damagePerSecond <= 0f)
             {
                 return;
             }
 
-            Health -= biters * DamagePerWorkerPerSecond * Time.deltaTime;
+            Health -= damagePerSecond * Time.deltaTime;
             if (Health <= 0f)
             {
                 Health = 0f;

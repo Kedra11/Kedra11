@@ -18,6 +18,8 @@ namespace AntEmpire.Ants
     public static class AntIds
     {
         public const string Worker = "worker";
+        public const string Soldier = "soldier";
+        public const string Scout = "scout";
     }
 
     /// <summary>

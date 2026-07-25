@@ -25,11 +25,27 @@ namespace AntEmpire.Ants
         [SerializeField] private float spawnRadius = 1.5f;
 
         private readonly List<AntController> _ants = new List<AntController>();
+        private readonly List<SoldierController> _soldiers = new List<SoldierController>();
+        private readonly List<ScoutController> _scouts = new List<ScoutController>();
 
         public int AliveWorkers { get; private set; }
 
         /// <summary>Live ants — used by combat (spider bites) and reassignment.</summary>
         public IReadOnlyList<AntController> Ants => _ants;
+        public IReadOnlyList<SoldierController> Soldiers => _soldiers;
+        public IReadOnlyList<ScoutController> Scouts => _scouts;
+
+        /// <summary>All colony members counted against the population cap.</summary>
+        public int TotalPopulation
+        {
+            get
+            {
+                var data = GameManager.Instance.SaveManager.Data;
+                return data.GetAntCount(AntIds.Worker)
+                     + data.GetAntCount(AntIds.Soldier)
+                     + data.GetAntCount(AntIds.Scout);
+            }
+        }
 
         private void Start()
         {
@@ -58,6 +74,14 @@ namespace AntEmpire.Ants
             for (int i = 0; i < savedCount; i++)
             {
                 SpawnWorkerInstance();
+            }
+            for (int i = 0; i < save.Data.GetAntCount(AntIds.Soldier); i++)
+            {
+                SpawnSoldierInstance();
+            }
+            for (int i = 0; i < save.Data.GetAntCount(AntIds.Scout); i++)
+            {
+                SpawnScoutInstance();
             }
 
             GameManager.Instance.Workforce.JobsChanged += ReassignJobs;
@@ -121,6 +145,58 @@ namespace AntEmpire.Ants
             return ant;
         }
 
+        /// <summary>Hatch a soldier (10 Food): patrols the nest and shields
+        /// workers in fights. Fails when the cap is reached or Food is short.</summary>
+        public bool TryHatchSoldier()
+        {
+            return TryHatchRole(AntIds.Soldier, foodCost: 10, SpawnSoldierInstance);
+        }
+
+        /// <summary>Hatch a scout (15 Food): roams far and discovers rich finds.</summary>
+        public bool TryHatchScout()
+        {
+            return TryHatchRole(AntIds.Scout, foodCost: 15, SpawnScoutInstance);
+        }
+
+        private bool TryHatchRole(string antId, int foodCost, System.Action spawn)
+        {
+            GameManager game = GameManager.Instance;
+            int cap = game.RoomService.PopulationCap + game.Queen.BonusPopulationCap;
+            if (TotalPopulation >= cap)
+            {
+                return false;
+            }
+            if (game.ResourceManager.TrySpend(ResourceType.Food, foodCost)
+                != ResourceTransactionResult.Success)
+            {
+                return false;
+            }
+
+            spawn();
+            var save = game.SaveManager;
+            save.Data.SetAntCount(antId, save.Data.GetAntCount(antId) + 1);
+            save.Save();
+            return true;
+        }
+
+        public void KillSoldier(SoldierController soldier)
+        {
+            if (soldier == null || !_soldiers.Remove(soldier))
+            {
+                return;
+            }
+
+            var save = GameManager.Instance.SaveManager;
+            int count = save.Data.GetAntCount(AntIds.Soldier) - 1;
+            save.Data.SetAntCount(AntIds.Soldier, count < 0 ? 0 : count);
+            save.Save();
+
+            FloatingWorldText.Spawn(
+                soldier.transform.position + Vector3.up * 0.6f,
+                "-1 soldier", new Color(0.9f, 0.25f, 0.2f));
+            Destroy(soldier.gameObject);
+        }
+
         /// <summary>Kill a worker (enemy attack): remove it from the colony,
         /// update the save and show a small death marker.</summary>
         public void KillWorker(AntController ant)
@@ -142,6 +218,35 @@ namespace AntEmpire.Ants
             Destroy(ant.gameObject);
 
             ReassignJobs();
+        }
+
+        private void SpawnSoldierInstance()
+        {
+            GameObject soldierObject = SpawnAntObject("SoldierAnt");
+            soldierObject.GetComponent<PlaceholderAntVisual>()
+                .SetAppearance(new Color(0.5f, 0.12f, 0.08f), extraScale: 1.3f);
+            _soldiers.Add(soldierObject.AddComponent<SoldierController>());
+        }
+
+        private void SpawnScoutInstance()
+        {
+            GameObject scoutObject = SpawnAntObject("ScoutAnt");
+            scoutObject.GetComponent<PlaceholderAntVisual>()
+                .SetAppearance(new Color(0.72f, 0.68f, 0.35f), extraScale: 0.9f);
+            _scouts.Add(scoutObject.AddComponent<ScoutController>());
+        }
+
+        private GameObject SpawnAntObject(string name)
+        {
+            Vector3 center = NestEntrance.Instance != null
+                ? NestEntrance.Instance.Position
+                : transform.position;
+            Vector2 offset = Random.insideUnitCircle.normalized * Random.Range(0.5f, spawnRadius);
+
+            var antObject = new GameObject(name);
+            antObject.transform.position = center + new Vector3(offset.x, 0f, offset.y);
+            antObject.AddComponent<PlaceholderAntVisual>();
+            return antObject;
         }
 
         /// <summary>Instantiate one ant near the nest without touching the save.</summary>

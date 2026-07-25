@@ -109,9 +109,18 @@ namespace AntEmpire.ResourceNodes
             Remaining -= taken;
             UpdateVisual();
 
-            if (IsDepleted && regrowSeconds > 0 && isActiveAndEnabled)
+            if (IsDepleted)
             {
-                StartCoroutine(RegrowAfterDelay());
+                if (regrowSeconds > 0 && isActiveAndEnabled)
+                {
+                    StartCoroutine(RegrowAfterDelay());
+                }
+                else
+                {
+                    // One-time nodes (scout finds like Golden Leaf / Honey)
+                    // vanish once emptied.
+                    Destroy(gameObject, 0.8f);
+                }
             }
 
             return taken;

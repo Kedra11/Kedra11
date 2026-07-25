@@ -24,6 +24,7 @@ namespace AntEmpire.Core
         [Header("World")]
         [SerializeField] private int leafNodes = 5;
         [SerializeField] private int foodNodes = 4;
+        [SerializeField] private int soilNodes = 3;
         [SerializeField] private float minNodeDistance = 4f;
         [SerializeField] private float maxNodeDistance = 9f;
 
@@ -53,7 +54,9 @@ namespace AntEmpire.Core
 
         private static void BuildEvents()
         {
-            new GameObject("Events").AddComponent<AntEmpire.Events.SpiderAttackEvent>();
+            var events = new GameObject("Events");
+            events.AddComponent<AntEmpire.Events.SpiderAttackEvent>();
+            events.AddComponent<AntEmpire.Events.RainEvent>();
         }
 
         private static void EnsureGameManager()
@@ -110,6 +113,13 @@ namespace AntEmpire.Core
             {
                 BuildNode(ResourceType.Food, PrimitiveType.Sphere,
                     new Vector3(0.55f, 0.55f, 0.55f), foodMaterial, amount: 40);
+            }
+
+            Material soilMaterial = MakeMaterial(new Color(0.5f, 0.38f, 0.26f));
+            for (int i = 0; i < soilNodes; i++)
+            {
+                BuildNode(ResourceType.Soil, PrimitiveType.Cylinder,
+                    new Vector3(0.6f, 0.22f, 0.6f), soilMaterial, amount: 35);
             }
         }
 

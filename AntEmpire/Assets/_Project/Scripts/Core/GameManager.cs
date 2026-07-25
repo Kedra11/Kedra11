@@ -34,6 +34,7 @@ namespace AntEmpire.Core
         public RoomService RoomService { get; private set; }
         public WorkforceService Workforce { get; private set; }
         public EvolutionService Evolution { get; private set; }
+        public QueenService Queen { get; private set; }
 
         /// <summary>Offline earnings waiting for the player to collect (null = none).
         /// Resources are added only when ClaimOfflineReward() is called.</summary>
@@ -70,6 +71,7 @@ namespace AntEmpire.Core
 
             Workforce = new WorkforceService(SaveManager);
             Evolution = new EvolutionService(SaveManager, ResourceManager, EvolutionLevelData.CreateDefaultSet());
+            Queen = new QueenService(SaveManager, ResourceManager);
 
             // Offline progress: computed from the previous session's last
             // save, shown by the HUD as a "While you were away" popup.

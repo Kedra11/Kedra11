@@ -19,6 +19,19 @@ namespace AntEmpire.Ants
         [SerializeField] private Color bodyColor = new Color(0.35f, 0.2f, 0.08f);
 
         private int _builtLevel = -1;
+        private Color? _colorOverride;
+        private float _extraScale = 1f;
+
+        /// <summary>Role skin (soldiers, scouts): fixed colour + size tweak.
+        /// Rebuilds the body immediately.</summary>
+        public void SetAppearance(Color color, float extraScale)
+        {
+            _colorOverride = color;
+            _extraScale = extraScale;
+            int level = _builtLevel < 1 ? 1 : _builtLevel;
+            _builtLevel = -1;
+            ApplyLevel(level);
+        }
 
         private void Awake()
         {
@@ -47,8 +60,8 @@ namespace AntEmpire.Ants
         private void Build(int level)
         {
             // Each level is ~15% bigger; level 5 turns golden and glows.
-            float s = 1f + 0.15f * (level - 1);
-            Color color = level >= 5 ? new Color(0.85f, 0.65f, 0.2f) : bodyColor;
+            float s = (1f + 0.15f * (level - 1)) * _extraScale;
+            Color color = _colorOverride ?? (level >= 5 ? new Color(0.85f, 0.65f, 0.2f) : bodyColor);
 
             Material bodyMaterial = new Material(Shader.Find("Standard")) { color = color };
             if (level >= 5)

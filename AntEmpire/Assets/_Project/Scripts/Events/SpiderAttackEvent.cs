@@ -71,9 +71,11 @@ namespace AntEmpire.Events
             spiderObject.AddComponent<PlaceholderSpiderVisual>();
 
             // Bigger colonies face tougher spiders — and earn more DNA.
+            // Soldiers count extra: they hit three times harder than workers.
             int workers = _spawner != null ? _spawner.Ants.Count : 3;
-            float health = baseHealth + healthPerWorker * workers;
-            _currentReward = baseDnaReward + workers / 2;
+            int soldiers = _spawner != null ? _spawner.Soldiers.Count : 0;
+            float health = baseHealth + healthPerWorker * (workers + soldiers * 3);
+            _currentReward = baseDnaReward + workers / 2 + soldiers;
 
             ActiveSpider = spiderObject.AddComponent<EnemyController>();
             ActiveSpider.Init(GameManager.Instance.ResourceManager, _spawner, nest, health);

@@ -124,5 +124,9 @@ namespace AntEmpire.Rooms
 
         /// <summary>Food cost of hatching one worker.</summary>
         public int HatchFoodCost => 5;
+
+        /// <summary>Colony-wide movement speed multiplier from dug tunnels:
+        /// +6% per Tunnel Hub level.</summary>
+        public float SpeedBonus => 1f + 0.06f * GetLevel(RoomIds.TunnelHub);
     }
 }

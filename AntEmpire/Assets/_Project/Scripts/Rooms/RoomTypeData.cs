@@ -10,6 +10,7 @@ namespace AntEmpire.Rooms
         public const string QueenChamber = "queen_chamber";
         public const string FoodStorage = "food_storage";
         public const string LarvaNursery = "larva_nursery";
+        public const string TunnelHub = "tunnel_hub";
     }
 
     /// <summary>
@@ -70,7 +71,8 @@ namespace AntEmpire.Rooms
             {
                 CreateRuntime(RoomIds.QueenChamber, "Queen Chamber", foodCost: 5, leavesCost: 15, soilCost: 0, multiplier: 1.7f),
                 CreateRuntime(RoomIds.FoodStorage, "Food Storage", foodCost: 0, leavesCost: 12, soilCost: 0, multiplier: 1.6f),
-                CreateRuntime(RoomIds.LarvaNursery, "Larva Nursery", foodCost: 5, leavesCost: 10, soilCost: 0, multiplier: 1.7f)
+                CreateRuntime(RoomIds.LarvaNursery, "Larva Nursery", foodCost: 5, leavesCost: 10, soilCost: 0, multiplier: 1.7f),
+                CreateRuntime(RoomIds.TunnelHub, "Tunnel Hub", foodCost: 0, leavesCost: 8, soilCost: 15, multiplier: 1.6f, maxLevel: 8)
             };
         }
     }

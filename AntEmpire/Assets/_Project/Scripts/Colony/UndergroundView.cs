@@ -31,6 +31,7 @@ namespace AntEmpire.Colony
         private Transform _growingEgg;
         private GameObject _foodGroup;
         private GameObject _nurseryGroup;
+        private GameObject _tunnelGroup;
         private QueenController _queen;
 
         private void Start()
@@ -75,6 +76,8 @@ namespace AntEmpire.Colony
                 float progress = _queen != null ? _queen.BirthProgress : 0f;
                 _growingEgg.localScale = Vector3.one * Mathf.Lerp(0.15f, 0.55f, progress);
             }
+
+            _tunnelGroup.SetActive(rooms.GetLevel(RoomIds.TunnelHub) > 0);
         }
 
         // ---- Construction -----------------------------------------------------
@@ -116,6 +119,15 @@ namespace AntEmpire.Colony
             AddPart(PrimitiveType.Sphere, new Vector3(4.8f, 3.5f, 0.3f), Vector3.one * 0.3f, eggColor, _nurseryGroup.transform);
             AddPart(PrimitiveType.Sphere, new Vector3(6.0f, 3.5f, 0.3f), Vector3.one * 0.3f, eggColor, _nurseryGroup.transform);
             _growingEgg = AddPart(PrimitiveType.Sphere, new Vector3(5.4f, 3.55f, 0.3f), Vector3.one * 0.15f, eggColor, _nurseryGroup.transform);
+
+            // Tunnel Hub: extra dug corridors below the queen chamber,
+            // visible once the room is built.
+            _tunnelGroup = new GameObject("TunnelHub");
+            _tunnelGroup.transform.SetParent(transform, worldPositionStays: false);
+            AddPart(PrimitiveType.Cube, new Vector3(-3f, 0.6f, 0.4f), new Vector3(5.5f, 0.7f, 0.7f), cavity, _tunnelGroup.transform);
+            AddPart(PrimitiveType.Cube, new Vector3(3f, 0.6f, 0.4f), new Vector3(5.5f, 0.7f, 0.7f), cavity, _tunnelGroup.transform);
+            AddPart(PrimitiveType.Sphere, new Vector3(-6f, 0.6f, 0.4f), new Vector3(1.6f, 1.2f, 1f), cavity, _tunnelGroup.transform);
+            AddPart(PrimitiveType.Sphere, new Vector3(6f, 0.6f, 0.4f), new Vector3(1.6f, 1.2f, 1f), cavity, _tunnelGroup.transform);
 
             // The cutaway faces away from the sun, so give it its own light.
             var lightObject = new GameObject("UndergroundLight");
