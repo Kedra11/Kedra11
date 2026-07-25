@@ -108,7 +108,11 @@ namespace AntEmpire.Core
             nodeObject.GetComponent<Renderer>().sharedMaterial = material;
             Object.Destroy(nodeObject.GetComponent<Collider>());
 
-            nodeObject.AddComponent<ResourceNode>().Configure(type, amount, regrowDelay: 25f);
+            nodeObject.AddComponent<ResourceNode>().Configure(
+                type, amount, regrowDelay: 25f,
+                respawnCenter: Vector3.zero,
+                respawnMinDistance: minNodeDistance,
+                respawnMaxDistance: maxNodeDistance);
         }
 
         private static void BuildSpawner()

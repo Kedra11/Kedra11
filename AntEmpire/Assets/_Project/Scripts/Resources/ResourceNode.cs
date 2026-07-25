@@ -20,19 +20,30 @@ namespace AntEmpire.ResourceNodes
         [SerializeField] private ResourceType type = ResourceType.Leaves;
         [SerializeField] private double startingAmount = 20;
         [SerializeField] private float regrowSeconds = 25f;
+        [Tooltip("When the node regrows, move it to a new random spot instead of the same place.")]
+        [SerializeField] private bool relocateOnRegrow = true;
 
         private Vector3 _fullScale;
+        private Vector3 _respawnCenter;
+        private float _respawnMinDistance = 4f;
+        private float _respawnMaxDistance = 9f;
 
         public ResourceType Type => type;
         public double Remaining { get; private set; }
         public bool IsDepleted => Remaining <= 0;
 
-        /// <summary>Configure a runtime-created node (used by the sandbox builder).</summary>
-        public void Configure(ResourceType resourceType, double amount, float regrowDelay)
+        /// <summary>Configure a runtime-created node (used by the sandbox builder).
+        /// The respawn ring defines where the node may reappear after depletion.</summary>
+        public void Configure(
+            ResourceType resourceType, double amount, float regrowDelay,
+            Vector3 respawnCenter, float respawnMinDistance, float respawnMaxDistance)
         {
             type = resourceType;
             startingAmount = amount;
             regrowSeconds = regrowDelay;
+            _respawnCenter = respawnCenter;
+            _respawnMinDistance = respawnMinDistance;
+            _respawnMaxDistance = respawnMaxDistance;
             Remaining = amount;
             UpdateVisual();
         }
@@ -41,6 +52,8 @@ namespace AntEmpire.ResourceNodes
         {
             _fullScale = transform.localScale;
             Remaining = startingAmount;
+            // Editor-placed nodes respawn around their own starting spot.
+            _respawnCenter = transform.position;
         }
 
         private void OnEnable()
@@ -107,6 +120,18 @@ namespace AntEmpire.ResourceNodes
         private IEnumerator RegrowAfterDelay()
         {
             yield return new WaitForSeconds(regrowSeconds);
+
+            if (relocateOnRegrow)
+            {
+                // Reappear somewhere new so gathering routes keep changing.
+                Vector2 direction = Random.insideUnitCircle.normalized;
+                float distance = Random.Range(_respawnMinDistance, _respawnMaxDistance);
+                transform.position = new Vector3(
+                    _respawnCenter.x + direction.x * distance,
+                    transform.position.y,
+                    _respawnCenter.z + direction.y * distance);
+            }
+
             Remaining = startingAmount;
             UpdateVisual();
         }
